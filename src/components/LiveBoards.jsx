@@ -871,7 +871,7 @@ function RelationScheme({ scene, solved }) {
   const width = (value) => Math.max(28, value * scale);
   const mark = solved || "?";
   const phrase = scene.diffText || "";
-  const barAt = (y, w, tone, i) => <rect x="148" y={y} width={w} height="30" className={`scheme-frame is-bar ${tone || ""}`} style={{ "--i": i }} />;
+  const barAt = (y, w, tone, i) => <rect x="148" y={y} width={w} height="36" className={`scheme-frame is-bar ${tone || ""}`} style={{ "--i": i }} />;
   let rows;
   if (mode === "less") {
     const whole = width(a);
@@ -898,7 +898,7 @@ function RelationScheme({ scene, solved }) {
         <text x={158 + base} y="58" className="scheme-label">{a}</text>
         <text x="8" y="136" className="scheme-label scheme-name">{names[1]}</text>
         {barAt(114, base, "is-second", 1)}
-        <rect x={148 + base} y="114" width={added} height="30" className="scheme-frame is-bar is-dashed" style={{ "--i": 2 }} />
+        <rect x={148 + base} y="114" width={added} height="36" className="scheme-frame is-bar is-dashed" style={{ "--i": 2 }} />
         <path d={`M${148 + base} 156 H${148 + base + added} M${148 + base} 156 V146 M${148 + base + added} 156 V146`} className="scheme-brace" />
         <text x={148 + base + added / 2} y="174" textAnchor="middle" className="scheme-label">{phrase}</text>
         <text x={158 + base + added} y="136" className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
@@ -914,7 +914,7 @@ function RelationScheme({ scene, solved }) {
         <text x={158 + (less ? piece * copies : piece)} y="58" className="scheme-label">{less ? a : a}</text>
         <text x="8" y="136" className="scheme-label scheme-name">{names[1]}</text>
         {Array.from({ length: less ? 1 : copies }, (_, index) => (
-          <rect key={index} x={148 + index * (piece + 6)} y="114" width={piece} height="30" className="scheme-frame is-bar is-second" style={{ "--i": index + 1 }} />
+          <rect key={index} x={148 + index * (piece + 6)} y="114" width={piece} height="36" className="scheme-frame is-bar is-second" style={{ "--i": index + 1 }} />
         ))}
         <text x="300" y="174" textAnchor="middle" className="scheme-label">{phrase}</text>
         <text x={158 + (less ? piece : copies * (piece + 6))} y="136" className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>

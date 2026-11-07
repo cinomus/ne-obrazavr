@@ -889,19 +889,23 @@ function RelationScheme({ scene, solved }) {
       </>
     );
   } else if (mode === "more") {
-    const base = width(a);
-    const added = Math.max(24, width(extra));
+    const total = Math.max(a + extra, 1);
+    const base = Math.max(96, Math.round(180 * (a / total)));
+    const added = Math.max(26, Math.round(180 * (extra / total)));
+    const x0 = 132;
+    const y1 = 18;
+    const y2 = 86;
+    const h = 30;
     rows = (
       <>
-        <text x="8" y="58" className="scheme-label scheme-name">{names[0]}</text>
-        {barAt(36, base, "", 0)}
-        <text x={158 + base} y="58" className="scheme-label">{a}</text>
-        <text x="8" y="136" className="scheme-label scheme-name">{names[1]}</text>
-        {barAt(114, base, "is-second", 1)}
-        <rect x={148 + base} y="114" width={added} height="36" className="scheme-frame is-bar is-dashed" style={{ "--i": 2 }} />
-        <path d={`M${148 + base} 156 H${148 + base + added} M${148 + base} 156 V146 M${148 + base + added} 156 V146`} className="scheme-brace" />
-        <text x={148 + base + added / 2} y="174" textAnchor="middle" className="scheme-label">{phrase}</text>
-        <text x={158 + base + added} y="136" className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
+        <text x="0" y={y1 + 21} className="scheme-label scheme-name">{names[0]}</text>
+        <rect x={x0} y={y1} width={base} height={h} className="scheme-frame is-bar" style={{ "--i": 0 }} />
+        <text x={x0 + base + 12} y={y1 + 21} className="scheme-label">{a}</text>
+        <text x="0" y={y2 + 21} className="scheme-label scheme-name">{names[1]}</text>
+        <rect x={x0} y={y2} width={base} height={h} className="scheme-frame is-bar is-second" style={{ "--i": 1 }} />
+        <rect x={x0 + base} y={y2} width={added} height={h} className="scheme-frame is-bar is-dashed" style={{ "--i": 2 }} />
+        <text x={x0 + base + added + 12} y={y2 + 21} className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
+        <text x={x0 + base + added / 2} y={y2 + h + 28} textAnchor="middle" className="scheme-label scheme-note">{phrase}</text>
       </>
     );
   } else if (mode === "times") {
@@ -940,8 +944,10 @@ function RelationScheme({ scene, solved }) {
       </>
     );
   }
+  const wide = mode === "more" ? 132 + Math.max(96, Math.round(180 * (a / Math.max(a + extra, 1)))) + Math.max(26, Math.round(180 * (extra / Math.max(a + extra, 1)))) + 56 : 520;
+  const tall = mode === "more" ? 156 : 190;
   return (
-    <svg className="scheme-draw" viewBox="0 0 520 190" role="img" aria-label={solved ? `Схема: ${solved}` : "Схема сравнения"}>
+    <svg className="scheme-draw" viewBox={`0 0 ${wide} ${tall}`} role="img" aria-label={solved ? `Схема: ${solved}` : "Схема сравнения"}>
       {rows}
     </svg>
   );

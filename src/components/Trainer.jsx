@@ -23,6 +23,7 @@ import { Scene, SceneChoices } from "./Scene";
 import WrittenBoard from "./WrittenBoard";
 import { CircleCenter, CommitTask, CubeEquation, CubeWays, MatrixTask, MeasureTask, PlaceTable, PythagorasTable, Ribbons, RowPick, SelectTask, SolutionBlock, StoryTask } from "./LiveBoards";
 import { ChoiceScene, ColumnBoard, CornerBoard, DictBoard, FindBoard, FrameBoard, HalfBoard, OpsBoard, RulerBoard, SortBoard, SplitEntry } from "./GradeBoards";
+import { DropBoard } from "./DropBoard";
 
 function Blank({ value, phase, active = false, label = "Поле ответа" }) {
   return (
@@ -336,20 +337,7 @@ export function NumericQuestion({ state, dispatch }) {
       </div>
     );
   }
-  if (question.scene?.kind === "drop") {
-    return (
-      <div className="drop-board">
-        <div className="drop-row">
-          <span className="drop-chip">{question.scene.start}</span>
-          <span className="drop-chip">{question.scene.op}</span>
-          <span className="drop-chip">{question.scene.n}</span>
-          <span className="op">=</span>
-          <Blank value={shown} phase={phase} />
-          <button type="button" className="btn secondary" disabled={phase !== "answer"} onClick={() => dispatch({ type: "back" })}>⌫</button>
-        </div>
-      </div>
-    );
-  }
+  if (question.scene?.kind === "drop") return <DropBoard />;
   if (question.type === "steps") return <WrittenBoard question={question} state={state} />;
   if (question.scene?.kind === "cubes-add" || question.scene?.kind === "cubes-sub") {
     return <CubeEquation scene={question.scene} shown={shown} phase={phase} />;
@@ -457,6 +445,9 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 760px)").matches);
   const [record, setRecord] = useState(null);
   const heard = useRef(null);
+  const questionRef = useRef(state.question);
+  questionRef.current = state.question;
+  const dropGame = state.question.scene?.kind === "drop";
   const numeric = state.question.type === "number" || state.question.type === "column" || state.question.type === "steps" || state.question.type === "commit";
   const neighbors = neighborTopics(gradeId, topic.id);
 
@@ -499,6 +490,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
 
   useEffect(() => {
     function onKey(event) {
+      if (questionRef.current?.scene?.kind === "drop") return;
       const tag = event.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || event.target?.isContentEditable) return;
       if (event.key === " " || event.key === "Spacebar") {
@@ -531,7 +523,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
     return () => window.clearInterval(timer);
   }, [story, state.phase]);
   const clock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  const keypadNeeded = numeric || state.question.keypad || state.question.entry || state.question.scene?.kind === "poly" || state.question.scene?.kind === "drop" || Boolean(state.question.picture) || state.question.scene?.kind === "pythagoras" || (state.question.scene?.kind === "grid" && state.question.scene.values?.length >= 100);
+  const keypadNeeded = !dropGame && (numeric || state.question.keypad || state.question.entry || state.question.scene?.kind === "poly" || Boolean(state.question.picture) || state.question.scene?.kind === "pythagoras" || (state.question.scene?.kind === "grid" && state.question.scene.values?.length >= 100));
   const showKeys = keypadNeeded && (narrow || keypadOn);
   const doneCount = Math.min(state.primaryDone, RUN_LENGTH);
 
@@ -547,13 +539,13 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
           </p>
           <h1>{topic.title}</h1>
         </div>
-        <p className="progress-label">
+        {dropGame ? <span /> : <p className="progress-label">
           {state.question.isReplay
             ? "Повтор ошибки"
             : state.phase === "done"
               ? `${RUN_LENGTH} из ${RUN_LENGTH}`
               : `Пример ${Math.min(state.primaryDone + 1, RUN_LENGTH)} из ${RUN_LENGTH}`}
-        </p>
+        </p>}
       </div>
       {topic.note ? <p className="note">{topic.note}</p> : null}
 
@@ -598,9 +590,9 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
       ) : (
         <div className="trainer-layout">
           <section className="board">
-            <div className="runbar" aria-hidden="true">
+            {dropGame ? null : <div className="runbar" aria-hidden="true">
               <span style={{ width: `${(doneCount / RUN_LENGTH) * 100}%` }} />
-            </div>
+            </div>}
             <div className="stage">
               {state.question.type === "paint" ? (
                 <PaintBoard question={state.question} phase={state.phase} dispatch={dispatch} badPaint={state.badPaint} />

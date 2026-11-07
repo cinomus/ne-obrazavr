@@ -56,28 +56,26 @@ function OpChoice({ question, phase, dispatch, tried, showSolution }) {
   const solved = phase === "reveal" || showSolution ? String(scene.result ?? "") : "";
   return (
     <div className="op-choice">
-      <div className="op-copy">
-        <p className="prompt">{question.prompt}</p>
-        <div className="op-tools">
-          {question.choices.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={["btn secondary", tried.includes(option) ? "is-wrong" : "", phase === "reveal" && option === question.answer ? "is-right" : ""].filter(Boolean).join(" ")}
-              disabled={phase !== "answer"}
-              onClick={() => dispatch({ type: "choice", value: option })}
-            >
-              {option}
-            </button>
-          ))}
-          <button type="button" className="btn secondary" aria-expanded={scheme} onClick={() => setScheme((value) => !value)}>Схема</button>
-          <button type="button" className="btn secondary" aria-label="Показать решение" onClick={() => dispatch({ type: "explain" })}>?</button>
-        </div>
-        {showSolution ? <SolutionBlock solution={question.solution} onNext={() => dispatch({ type: "next" })} /> : null}
-      </div>
+      <p className="prompt op-copy">{question.prompt}</p>
       <div className="op-art">
         {scheme ? <StoryScheme scene={scene} solved={solved} /> : <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 4)} />}
       </div>
+      <div className="op-tools">
+        {question.choices.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={["btn secondary", tried.includes(option) ? "is-wrong" : "", phase === "reveal" && option === question.answer ? "is-right" : ""].filter(Boolean).join(" ")}
+            disabled={phase !== "answer"}
+            onClick={() => dispatch({ type: "choice", value: option })}
+          >
+            {option}
+          </button>
+        ))}
+        <button type="button" className="btn secondary" aria-expanded={scheme} onClick={() => setScheme((value) => !value)}>Схема</button>
+        <button type="button" className="btn secondary" aria-label="Показать решение" onClick={() => dispatch({ type: "explain" })}>?</button>
+      </div>
+      {showSolution ? <SolutionBlock solution={question.solution} onNext={() => dispatch({ type: "next" })} /> : null}
     </div>
   );
 }

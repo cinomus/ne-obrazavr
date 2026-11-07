@@ -1974,7 +1974,8 @@ function drops() {
     prompt: `${start} ${op} ${n} =`,
     answer: String(answer),
     expect: answer,
-    keypad: true,
+    hideSkip: true,
+    hideHint: true,
     scene: { kind: "drop", start, op, n },
   };
 }

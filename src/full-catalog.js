@@ -892,7 +892,10 @@ function opChoice() {
     const b = ri(1, 8);
     return {
       ...choice(`${cap(tale.be(a))}. ${cap(tale.add(b))}. Что сделать, чтобы узнать, сколько ${tale.gen} стало?`, "Сложить", ["Сложить", "Вычесть"]),
-      scene: { kind: "story", mode: "join", a, b, picture: tale.picture, result: a + b },
+      hideSkip: true,
+      hideHint: true,
+      choices: ["Сложить", "Вычесть"],
+      scene: { kind: "story", mode: "join", a, b, picture: tale.picture, result: a + b, beside: true },
       solution: { steps: [`Было ${a}, стало ${a + b}.`, `${a} + ${b} = ${a + b}.`], answerLine: `Ответ: сложить, ${a + b} ${tale.gen}.` },
     };
   }
@@ -901,7 +904,10 @@ function opChoice() {
     const left = ri(1, 12);
     return {
       ...choice(`${cap(tale.be(left + taken))}. ${cap(tale.rem(taken))}. Что сделать, чтобы узнать, сколько ${tale.gen} осталось?`, "Вычесть", ["Сложить", "Вычесть"]),
-      scene: { kind: "story", mode: "remove", a: left + taken, b: taken, picture: tale.picture, result: left },
+      hideSkip: true,
+      hideHint: true,
+      choices: ["Сложить", "Вычесть"],
+      scene: { kind: "story", mode: "remove", a: left + taken, b: taken, picture: tale.picture, result: left, beside: true },
       solution: { steps: [`Было ${left + taken}, стало ${left}.`, `${left + taken} − ${taken} = ${left}.`], answerLine: `Ответ: вычесть, ${left} ${tale.gen}.` },
     };
   }
@@ -910,7 +916,10 @@ function opChoice() {
     const extra = ri(1, 6);
     return {
       ...choice(`${place.first} ${qty(a, place.forms)}${place.tail || ""}, а ${place.short} — на ${extra} больше. Что сделать, чтобы узнать, сколько ${place.ask} ${place.second}?`, "Сложить", ["Сложить", "Вычесть"]),
-      scene: { kind: "story", mode: "more", a, b: extra, picture: place.picture, names: place.names, diffText: `на ${extra} больше`, result: a + extra },
+      hideSkip: true,
+      hideHint: true,
+      choices: ["Сложить", "Вычесть"],
+      scene: { kind: "story", mode: "more", a, b: extra, picture: place.picture, names: place.names, diffText: `на ${extra} больше`, result: a + extra, beside: true },
       solution: { steps: [`На ${extra} больше — значит, столько же и ещё ${extra}.`, `${a} + ${extra} = ${a + extra}.`], answerLine: `Ответ: сложить, ${a + extra}.` },
     };
   }
@@ -918,7 +927,10 @@ function opChoice() {
   const taken = ri(1, 8);
   return {
     ...choice(`${cap(tale.someBe)}. Потом ${tale.rem(taken)}, и осталось ${left}. Что сделать, чтобы узнать, сколько ${tale.gen} было сначала?`, "Сложить", ["Сложить", "Вычесть"]),
-    scene: { kind: "story", mode: "leave", a: left, b: taken, picture: tale.picture, unknown: "s", result: left + taken },
+    hideSkip: true,
+    hideHint: true,
+    choices: ["Сложить", "Вычесть"],
+    scene: { kind: "story", mode: "leave", a: left, b: taken, picture: tale.picture, unknown: "s", result: left + taken, beside: true },
     solution: { steps: [`Было неизвестно, осталось ${left}.`, `${left} + ${taken} = ${left + taken}.`], answerLine: `Ответ: сложить, ${left + taken} ${tale.gen}.` },
   };
 }

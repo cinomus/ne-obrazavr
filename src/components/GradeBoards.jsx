@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Scene } from "./Scene";
-import { SolutionBlock, StoryPicture, StorySchemeButton } from "./LiveBoards";
+import { SolutionBlock, StoryPicture, StoryScheme, StorySchemeButton } from "./LiveBoards";
 
 function BareChoices({ question, phase, dispatch, tried }) {
   return (
@@ -46,8 +46,45 @@ function Pips({ count, bare = false }) {
   );
 }
 
+function OpChoice({ question, phase, dispatch, tried, showSolution }) {
+  const scene = question.scene;
+  const [scheme, setScheme] = useState(false);
+  useEffect(() => setScheme(false), [question.prompt, question.answer]);
+  useEffect(() => {
+    if (phase === "reveal") setScheme(true);
+  }, [phase, question.prompt, question.answer]);
+  const solved = phase === "reveal" || showSolution ? String(scene.result ?? "") : "";
+  return (
+    <div className="op-choice">
+      <div className="op-copy">
+        <p className="prompt">{question.prompt}</p>
+        <div className="op-tools">
+          {question.choices.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={["btn secondary", tried.includes(option) ? "is-wrong" : "", phase === "reveal" && option === question.answer ? "is-right" : ""].filter(Boolean).join(" ")}
+              disabled={phase !== "answer"}
+              onClick={() => dispatch({ type: "choice", value: option })}
+            >
+              {option}
+            </button>
+          ))}
+          <button type="button" className="btn secondary" aria-expanded={scheme} onClick={() => setScheme((value) => !value)}>Схема</button>
+          <button type="button" className="btn secondary" aria-label="Показать решение" onClick={() => dispatch({ type: "explain" })}>?</button>
+        </div>
+        {showSolution ? <SolutionBlock solution={question.solution} onNext={() => dispatch({ type: "next" })} /> : null}
+      </div>
+      <div className="op-art">
+        {scheme ? <StoryScheme scene={scene} solved={solved} /> : <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 4)} />}
+      </div>
+    </div>
+  );
+}
+
 export function ChoiceScene({ question, phase, dispatch, tried, showSolution = false }) {
   const scene = question.scene;
+  if (scene?.beside) return <OpChoice question={question} phase={phase} dispatch={dispatch} tried={tried} showSolution={showSolution} />;
   return (
     <div className="choice-scene">
       {scene.kind === "story" ? <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 6)} /> : null}

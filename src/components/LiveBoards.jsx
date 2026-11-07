@@ -1007,7 +1007,7 @@ function ChainScheme({ scene, solved }) {
   );
 }
 
-function StoryScheme({ scene, solved }) {
+export function StoryScheme({ scene, solved }) {
   const a = Number(scene.a) || 0;
   const b = Number(scene.b) || 0;
   const c = Number(scene.c) || 0;

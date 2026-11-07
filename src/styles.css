@@ -1254,6 +1254,13 @@ h1, h2, h3, p { margin: 0; }
 .solution li.solution-answer { font-weight: 800; }
 .solution .btn { margin-top: 8px; }
 .choice-scene > .btn.secondary { justify-self: center; }
+.op-choice { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: center; }
+.op-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.op-tools .btn.is-right { background: #e7f4ea; }
+.op-tools .btn.is-wrong { background: #f8d7d4; }
+.op-art .story-picture { width: 200px; }
+.op-art .story-picture svg { width: 56px; height: 56px; }
+.op-art .scheme-draw { width: 100%; height: auto; }
 .scheme-name { font-size: 15px; }
 .fact-table { border-collapse: collapse; margin: 0 auto 12px; }
 .fact-table th, .fact-table td { border: 2px solid #1c2b24; padding: 8px 14px; background: #fffdf8; font-weight: 700; }

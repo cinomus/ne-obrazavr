@@ -642,14 +642,14 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
               {state.status?.text || "\u00a0"}
             </p>
 
-            <div className="hint-row">
-              <p className="hint">
+            {!state.question.hideHint || state.question.rule || state.question.help || (state.question.check && state.phase === "answer") || (state.question.solution && state.question.scene?.kind !== "story") || !state.question.hideSkip ? <div className="hint-row">
+              {state.question.hideHint ? null : <p className="hint">
                 {numeric
                   ? "Используйте цифры на клавиатуре. Пробел — посмотреть ответ."
                   : state.question.type === "compare"
                     ? "Выберите знак сравнения с помощью кнопок."
                     : "Выберите ответ. Пробел — посмотреть ответ."}
-              </p>
+              </p>}
               {state.question.rule ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "hint", kind: "rule" })}>ПРАВИЛО</button> : null}
               {state.question.help ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "hint", kind: "help" })}>ПОМОЩЬ</button> : null}
               {state.question.solution && state.question.scene?.kind !== "story" ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "explain" })}>Показать решение</button> : null}
@@ -659,7 +659,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
                   {state.question.revealLabel || state.question.skipLabel || "Не знаю"}
                 </button>
               )}
-            </div>
+            </div> : null}
 
             {showKeys ? (
               <Keypad

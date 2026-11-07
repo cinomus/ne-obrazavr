@@ -259,12 +259,13 @@ function PaintBoard({ question, phase, dispatch, badPaint }) {
           const row = Math.floor(index / question.cols);
           const key = `${row}:${col}`;
           const filled = given.has(key);
+          const revealed = phase === "reveal" && (question.needed || []).some((cell) => cell.join(":") === key);
           const locked = filled || lockedEmpty.has(key);
           return (
             <button
               key={key}
               type="button"
-              className={`paint-cell ${filled || marks.has(key) ? "filled-cell" : "empty-cell"} ${extras.has(key) ? "is-wrong" : ""} ${lockedEmpty.has(key) ? "is-locked" : ""}`}
+              className={`paint-cell ${filled || marks.has(key) || revealed ? "filled-cell" : "empty-cell"} ${extras.has(key) ? "is-wrong" : ""} ${lockedEmpty.has(key) ? "is-locked" : ""}`}
               disabled={phase !== "answer" || locked}
               onClick={() => toggle(row, col)}
             />
@@ -273,6 +274,7 @@ function PaintBoard({ question, phase, dispatch, badPaint }) {
       </div>
       <span className="mirror-axis" aria-hidden="true" />
       </div>
+      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
       <div className="paint-actions">
         <button type="button" className="btn" disabled={phase !== "answer"} onClick={check}>
           Проверить
@@ -329,7 +331,7 @@ export function NumericQuestion({ state, dispatch }) {
           <Blank value={third} phase={bad[2] ? "flash" : phase} active={phase === "answer" && active === 2} label="Сколько всего" />
         </div>
         {phase === "reveal" ? (
-          <button type="button" className="btn" onClick={() => dispatch({ type: "tick-reveal" })}>Далее</button>
+          <button type="button" className="btn secondary" onClick={() => dispatch({ type: "tick-reveal" })}>Далее</button>
         ) : null}
       </div>
     );

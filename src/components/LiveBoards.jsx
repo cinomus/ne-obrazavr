@@ -936,7 +936,7 @@ function RelationScheme({ scene, solved }) {
         {barAt(114, wb, "is-second", 1)}
         <text x={158 + wb} y="136" className="scheme-label">{extra}</text>
         <path d={`M${start} 156 H${start + diff} M${start} 156 V146 M${start + diff} 156 V146`} className="scheme-brace" />
-        <text x={start + diff / 2} y="176" textAnchor="middle" className={`scheme-label ${solved ? "is-solved" : ""}`}>{phrase ? `${phrase}: ${mark}` : mark}</text>
+        <text x={start + diff / 2} y="176" textAnchor="middle" className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
       </>
     );
   }

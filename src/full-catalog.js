@@ -1307,6 +1307,7 @@ function findShapes() {
     type: "select",
     prompt: "Найди все квадраты",
     answer: ids.join("|"),
+    manualNext: true,
     scene: { kind: "find", items, seed: ri(1, 99999) },
   };
 }
@@ -1342,25 +1343,37 @@ function segment() {
   const kind = pick(["cm", "cm", "longer", "shorter", "dm"]);
   let mm = 40;
   let prompt = "Начертите отрезок AB длиной 4 см.";
+  let steps = ["Отрезок длиной 4 см. Точка A стоит на нуле линейки.", "Точку B ставим на отметке 4: 4 × 1 = 4 см."];
+  let answerLine = "Ответ: 4 см.";
   if (kind === "cm") {
     const cm = ri(2, 12);
     mm = cm * 10;
     prompt = `Начертите отрезок AB длиной ${cm} см.`;
+    steps = [`Отрезок длиной ${cm} см. Точка A стоит на нуле линейки.`, `Точку B ставим на отметке ${cm}: ${cm} × 1 = ${cm} см.`];
+    answerLine = `Ответ: ${cm} см.`;
   } else if (kind === "longer" || kind === "shorter") {
     const base = ri(3, 8);
     const delta = ri(1, 3);
     const cm = kind === "longer" ? base + delta : base - delta;
     mm = cm * 10;
     prompt = `Начертите отрезок AB, который на ${delta} см ${kind === "longer" ? "длиннее" : "короче"} отрезка длиной ${base} см.`;
+    steps = kind === "longer"
+      ? [`Отрезок на ${delta} см длиннее. Складываем: ${base} + ${delta} = ${cm}.`, `Точка A на нуле, точка B на отметке ${cm} см.`]
+      : [`Отрезок на ${delta} см короче. Вычитаем: ${base} − ${delta} = ${cm}.`, `Точка A на нуле, точка B на отметке ${cm} см.`];
+    answerLine = `Ответ: ${cm} см.`;
   } else {
     const extra = ri(1, 4);
-    mm = 100 + extra * 10;
+    const cm = 10 + extra;
+    mm = cm * 10;
     prompt = `Начертите отрезок AB длиной 1 дм ${extra} см.`;
+    steps = ["1 дм = 10 см.", `Складываем: 10 + ${extra} = ${cm} см.`, `Точка A на нуле, точка B на отметке ${cm} см.`];
+    answerLine = `Ответ: ${cm} см.`;
   }
   return {
     type: "select",
     prompt,
     answer: String(mm),
+    solution: { steps, answerLine },
     scene: { kind: "ruler", max: 15, step: 10, seed: ri(1, 99999) },
   };
 }
@@ -1437,6 +1450,7 @@ function dictation() {
     type: "select",
     prompt: "Рисуй по стрелкам. Начни с красной точки.",
     answer: steps.join("|"),
+    manualNext: true,
     scene: { kind: "dict", rows, cols, start, commands, seed: ri(1, 99999) },
   };
 }
@@ -1655,7 +1669,10 @@ function elapsed() {
     scene: { kind: "clocks", clocks: [{ hour: start, minute: 0 }, { hour: end, minute: 0 }] },
     unit: "ч",
     keypad: true,
-    solution: { steps: [`От ${from} до ${to} — ${hours} ${plural(hours, "час", "часа", "часов")}.`], answerLine: `Ответ: ${hours} ч.` },
+    solution: {
+      steps: [`От ${from} до ${to}. Вычитаем часы: ${end} − ${start} = ${hours}.`],
+      answerLine: `Ответ: ${hours} ч.`,
+    },
   };
 }
 
@@ -1671,7 +1688,10 @@ function place100() {
     scene: { kind: "blocks", tens, ones },
     keypad: true,
     check: true,
-    solution: { steps: ["Десятки пишут первой цифрой, единицы — второй.", `Получаем ${value}.`], answerLine: `Ответ: ${value}.` },
+    solution: {
+      steps: [`${tens} ${plural(tens, "десяток", "десятка", "десятков")} и ${ones} ${plural(ones, "единица", "единицы", "единиц")}.`, `Умножаем десятки и прибавляем единицы: ${tens} × 10 + ${ones} = ${value}.`],
+      answerLine: `Ответ: ${value}.`,
+    },
   };
 }
 
@@ -1696,7 +1716,10 @@ function place1000() {
     answer: String(value),
     expect: value,
     keypad: true,
-    solution: { steps: ["Сотни, десятки и единицы записывают подряд. Пустой разряд — это 0.", `Получаем ${value}.`], answerLine: `Ответ: ${value}.` },
+    solution: {
+      steps: [`${hundreds} сот., ${tens} дес. и ${ones} ед. Пустой разряд пишем нулём.`, `${hundreds} × 100 + ${tens} × 10 + ${ones} = ${value}.`],
+      answerLine: `Ответ: ${value}.`,
+    },
   };
 }
 
@@ -1717,7 +1740,10 @@ function classes() {
     answer: digit,
     choices: shuffle(options),
     scene: { kind: "places", number: text, index },
-    solution: { steps: [`В таблице классов цифра разряда «${places[index]}» — ${digit}.`], answerLine: `Ответ: ${digit}.` },
+    solution: {
+      steps: [`В числе ${number} разряд «${places[index]}» стоит на месте ${index + 1} справа.`, `Цифра ${digit} × ${10 ** index} = ${Number(digit) * 10 ** index}.`],
+      answerLine: `Ответ: ${digit}.`,
+    },
   };
 }
 
@@ -1731,7 +1757,10 @@ function readBig() {
     answer: String(value),
     expect: value,
     keypad: true,
-    solution: { steps: ["Тысячи пишут слева, затем три цифры класса единиц.", `${thousands} тысяч и ${rest} — это ${value}.`], answerLine: `Ответ: ${value}.` },
+    solution: {
+      steps: [`${thousands} тысяч — это класс тысяч: ${thousands} × 1000 = ${thousands * 1000}.`, `Класс единиц — ${rest}. Складываем: ${thousands * 1000} + ${rest} = ${value}.`],
+      answerLine: `Ответ: ${value}.`,
+    },
   };
 }
 
@@ -2079,12 +2108,13 @@ function powers() {
     const n = ri(2, 40);
     return {
       type: "commit",
-      prompt: `Найдите произведение ${n} · ${base}`,
-      answer: String(n * base),
-      expect: n * base,
-      keypad: true,
-    };
-  }
+    prompt: `Найдите произведение ${n} · ${base}`,
+    answer: String(n * base),
+    expect: n * base,
+    keypad: true,
+    solution: { steps: [`Умножаем на ${base}, к числу дописываем нули.`, `${n} × ${base} = ${n * base}.`], answerLine: `Ответ: ${n * base}.` },
+  };
+}
   const q = ri(2, 40);
   return {
     type: "commit",
@@ -2092,6 +2122,7 @@ function powers() {
     answer: String(q),
     expect: q,
     keypad: true,
+    solution: { steps: [`Делим на ${base}, у числа становится меньше нулей.`, `${q * base} : ${base} = ${q}.`], answerLine: `Ответ: ${q}.` },
   };
 }
 
@@ -2165,6 +2196,19 @@ function factorBetween(units, factors, from, to) {
 }
 
 function unitTask(prompt, formula, answer, suffix, units, factors, from, to) {
+  const head = formula.split("=")[0].trim().replace(/\.+$/, "");
+  const unit = String(suffix || "").replace(/\.+$/, "");
+  const parts = [...head.matchAll(/(\d+)\s+(\S+)/g)].map((item) => [Number(item[1]), item[2].replace(/\.+$/, "")]);
+  let equation = `${head} = ${answer}`;
+  if (parts.length === 1) {
+    const amount = parts[0][0];
+    const factor = answer > amount ? answer / amount : amount / answer;
+    equation = answer > amount ? `${amount} × ${factor} = ${answer}` : `${amount} : ${factor} = ${answer}`;
+  } else if (parts.length === 2) {
+    const [big, small] = parts;
+    const factor = (answer - small[0]) / big[0];
+    equation = `${big[0]} × ${factor} + ${small[0]} = ${answer}`;
+  }
   return {
     type: "commit",
     prompt,
@@ -2173,6 +2217,7 @@ function unitTask(prompt, formula, answer, suffix, units, factors, from, to) {
     expect: answer,
     suffix,
     keypad: true,
+    solution: { steps: [`Переводим: ${head}.`, `${equation} ${unit}.`], answerLine: `Ответ: ${answer} ${unit}.` },
     scene: { kind: "ladder", units, factors, from, to, shown: formula, seed: ri(1, 99999) },
   };
 }
@@ -2222,6 +2267,7 @@ function moneyUnits() {
     answer: String(total),
     expect: total,
     keypad: true,
+    solution: { steps: ["1 р. — это 100 к.", `${rubles} × 100 + ${kopecks} = ${total}.`], answerLine: `Ответ: ${total} к.` },
   };
 }
 
@@ -2241,6 +2287,14 @@ function addMeasures() {
     expect: total,
     entry: [String(meters), String(cm).padStart(2, "0")],
     scene: { kind: "measures", left: `${aM} м ${aC} см + ${bM} м ${bC} см` },
+    solution: {
+      steps: [
+        `${aM} м ${aC} см = ${aM} × 100 + ${aC} = ${aM * 100 + aC} см.`,
+        `${bM} м ${bC} см = ${bM} × 100 + ${bC} = ${bM * 100 + bC} см.`,
+        `Складываем: ${aM * 100 + aC} + ${bM * 100 + bC} = ${total} см = ${meters} м ${cm} см.`,
+      ],
+      answerLine: `Ответ: ${meters} м ${String(cm).padStart(2, "0")} см.`,
+    },
   };
 }
 
@@ -2260,6 +2314,14 @@ function mulMeasures() {
     expect: part,
     entry: [String(meters), String(cm).padStart(2, "0")],
     scene: { kind: "measures", left: `${totalM} м ${String(totalC).padStart(2, "0")} см : ${times}` },
+    solution: {
+      steps: [
+        `${totalM} м ${String(totalC).padStart(2, "0")} см = ${totalM} × 100 + ${totalC} = ${total} см.`,
+        `Делим: ${total} : ${times} = ${part} см.`,
+        `${part} см = ${meters} м ${String(cm).padStart(2, "0")} см.`,
+      ],
+      answerLine: `Ответ: ${meters} м ${String(cm).padStart(2, "0")} см.`,
+    },
   };
 }
 
@@ -2270,6 +2332,7 @@ function rightAngle() {
     prompt: "Нажмите на прямой угол треугольника",
     answer: names[1],
     choices: names,
+    solution: { steps: ["Прямой угол проверяют угольником: его стороны совпадают со сторонами угла.", `Угол ${names[1]} прямой: ${names[1]} = 90°.`], answerLine: `Ответ: угол ${names[1]}.` },
     scene: { kind: "angle", names, seed: ri(1, 99999) },
   };
 }
@@ -2334,10 +2397,12 @@ function areaRect() {
 
 function polyPerimeter() {
   const sides = [ri(2, 10), ri(2, 10), ri(2, 10), ri(2, 10), ri(2, 10)];
+  const sum = sides.reduce((total, side) => total + side, 0);
   return {
-    ...ask("Найди периметр многоугольника", sides.reduce((sum, side) => sum + side, 0)),
+    ...ask("Найди периметр многоугольника", sum),
     scene: { kind: "poly-sides", sides },
     unit: "см",
+    solution: { steps: ["Периметр — сумма всех сторон.", `${sides.join(" + ")} = ${sum}.`], answerLine: `Ответ: ${sum} см.` },
   };
 }
 
@@ -2398,6 +2463,13 @@ function rectBoth() {
     type: "select",
     prompt: `Начертите прямоугольник с периметром ${2 * (w + h)} см, одна из сторон которого ${w} см. Сторона клетки — 1 см. Отметьте две противоположные вершины.`,
     answer: [a, b].sort().join("|"),
+    solution: {
+      steps: [
+        `Периметр ${2 * (w + h)} см. Половина периметра — сумма двух соседних сторон: ${2 * (w + h)} : 2 = ${w + h}.`,
+        `Соседняя сторона: ${w + h} − ${w} = ${h} см.`,
+      ],
+      answerLine: `Ответ: ${w} см и ${h} см.`,
+    },
     scene: { kind: "corners", cols: 8, rows: 6 },
   };
 }
@@ -2457,7 +2529,7 @@ function circleName() {
       prompt: askDisk ? "Нажмите на круг." : "Нажмите на окружность.",
       answer: askDisk ? "круг" : "окружность",
       choices: shapes.map((shape) => shape.id),
-      solution: { steps: ["Круг закрашен внутри, окружность — только линия."], answerLine: `Ответ: ${askDisk ? "круг" : "окружность"}.` },
+      solution: { steps: ["Круг закрашен внутри, окружность — только линия.", askDisk ? "Закрашенная фигура — круг." : "Линия без внутренности — окружность."], answerLine: `Ответ: ${askDisk ? "круг" : "окружность"}.` },
       scene: { kind: "shapes", shapes, seed: ri(1, 99999) },
     };
   }
@@ -2473,7 +2545,7 @@ function circleName() {
       prompt: "Нажмите на центр окружности.",
       answer: "центр",
       choices: points.map((point) => point.id),
-      solution: { steps: ["Центр — точка, из которой все радиусы равны."], answerLine: "Ответ: центр." },
+      solution: { steps: ["Центр — точка, из которой все радиусы равны.", "На рисунке это точка в середине окружности."], answerLine: "Ответ: центр." },
       scene: { kind: "points", points, seed: ri(1, 99999) },
     };
   }
@@ -2497,8 +2569,8 @@ function circleName() {
     answer: kind === "radius" ? "радиус" : "диаметр",
     choices: segments.map((segment) => segment.id),
     solution: kind === "radius"
-      ? { steps: ["Радиус — отрезок от центра окружности до точки на ней.", "На рисунке это отрезок OE."], answerLine: "Ответ: радиус, отрезок OE." }
-      : { steps: ["Диаметр проходит через центр и соединяет две точки окружности."], answerLine: "Ответ: диаметр." },
+      ? { steps: ["Радиус — отрезок от центра окружности до точки на ней.", "На рисунке это OE. Диаметр вдвое длиннее: d = 2 × OE."], answerLine: "Ответ: радиус, отрезок OE." }
+      : { steps: ["Диаметр проходит через центр и соединяет две точки окружности.", "Его длина — два радиуса: d = 2 × r."], answerLine: "Ответ: диаметр." },
     scene: { kind: "segments", segments, seed: ri(1, 99999) },
   };
 }
@@ -2549,6 +2621,7 @@ function drawHalf() {
     needed,
     mask,
     answer: needed.map((cell) => cell.join(":")).sort().join("|"),
+    manualNext: true,
     scene: { seed: ri(1, 99999) },
   };
 }
@@ -2565,6 +2638,10 @@ function symmetry() {
     for (let col = mid - width; col < mid; col += 1) given.push([row, col]);
   }
   const needed = given.map(([row, col]) => [row, cols - 1 - col]);
+  const sample = given[0];
+  const mirror = needed[0];
+  const source = sample[1] + 1;
+  const reflected = mirror[1] + 1;
   return {
     type: "paint",
     prompt: "Закрасьте клетки так, чтобы рисунок стал симметричным относительно прямой.",
@@ -2573,6 +2650,13 @@ function symmetry() {
     given,
     needed,
     answer: needed.map((cell) => cell.join(":")).sort().join("|"),
+    solution: {
+      steps: [
+        `Клетка в строке ${sample[0] + 1}, столбце ${source}. Прямая стоит посередине ${cols} столбцов.`,
+        `Отражение столбца: ${cols} − ${source} + 1 = ${reflected}. Клетка переходит в (${sample[0] + 1}, ${reflected}).`,
+      ],
+      answerLine: "Ответ — отражённые клетки.",
+    },
   };
 }
 
@@ -2698,7 +2782,13 @@ function chartBuild() {
   return {
     type: "select",
     prompt: "Постройте диаграмму по таблице. Нажмите столбик на нужной высоте или потяните его вверх.",
-    solution: { steps: [`Цена деления шкалы — 1. Столбики: ${names.map((name, index) => `${name} — ${heights[index]}`).join(", ")}.`], answerLine: "Ответ совпадает с числами в таблице." },
+    solution: {
+      steps: [
+        "Цена деления шкалы — 1. Высота столбика равна числу в таблице.",
+        ...names.map((name, index) => `${name}: ${heights[index]} × 1 = ${heights[index]}.`),
+      ],
+      answerLine: `Ответ: ${names.map((name, index) => `${name} — ${heights[index]}`).join(", ")}.`,
+    },
     answer: heights.map((height, index) => `${index}:${height}`).sort().join("|"),
     scene: { kind: "columns", max: 5, title: "Сколько птиц прилетело к кормушке", items: names.map((label, index) => ({ label, value: heights[index] })) },
   };
@@ -2747,12 +2837,21 @@ function threeActionsAdd() {
   const mid = a - b + c;
   const d = ri(0, mid);
   const value = mid - d;
+  const afterFirst = a - b;
   return {
     type: "commit",
     prompt: `Найдите значение выражения ${a} − ${b} + ${c} − ${d}`,
     answer: String(value),
     expect: value,
     keypad: true,
+    solution: {
+      steps: [
+        `Считаем слева направо. Вычитаем: ${a} − ${b} = ${afterFirst}.`,
+        `Складываем: ${afterFirst} + ${c} = ${mid}.`,
+        `Вычитаем: ${mid} − ${d} = ${value}.`,
+      ],
+      answerLine: `Ответ: ${value}.`,
+    },
   };
 }
 
@@ -2781,6 +2880,10 @@ function threeActions() {
     answer: String(value),
     expect: value,
     keypad: true,
+    solution: {
+      steps: [`Сначала скобки. Складываем: ${a} + ${b} = ${a + b}.`, `Затем умножаем: ${a + b} × ${c} = ${value}.`],
+      answerLine: `Ответ: ${value}.`,
+    },
   };
 }
 
@@ -3216,30 +3319,94 @@ function helpLine(title, question) {
   return "";
 }
 
+function explainTokens(parts) {
+  const steps = [];
+  let current = parts.filter((token) => token !== "");
+  const verb = (op) => (op === "+" ? "Складываем" : op === "−" ? "Вычитаем" : op === "×" || op === "·" ? "Умножаем" : "Делим");
+  function apply(a, op, b) {
+    const left = Number(a);
+    const right = Number(b);
+    if (op === "+") return left + right;
+    if (op === "−") return left - right;
+    if (op === "×" || op === "·") return left * right;
+    if (op === "÷" || op === ":") return left / right;
+    return NaN;
+  }
+  function fold(list, ops, prefix) {
+    const next = list.slice();
+    let index = next.findIndex((token) => ops.includes(token));
+    let first = true;
+    while (index > 0) {
+      const value = apply(next[index - 1], next[index], next[index + 1]);
+      if (!Number.isFinite(value)) return null;
+      steps.push(`${first && prefix ? `${prefix} ` : ""}${verb(next[index])}: ${next[index - 1]} ${next[index]} ${next[index + 1]} = ${value}.`);
+      next.splice(index - 1, 3, String(value));
+      index = next.findIndex((token) => ops.includes(token));
+      first = false;
+    }
+    return next;
+  }
+  while (current.includes("(")) {
+    const open = current.lastIndexOf("(");
+    const close = current.indexOf(")", open);
+    if (close < 0) break;
+    let inner = fold(current.slice(open + 1, close), ["×", "·", "÷", ":"], "Сначала скобки.");
+    if (!inner) return null;
+    inner = fold(inner, ["+", "−"], "Сначала скобки.");
+    if (!inner) return null;
+    current = [...current.slice(0, open), ...inner, ...current.slice(close + 1)];
+  }
+  current = fold(current, ["×", "·", "÷", ":"], "");
+  if (!current) return null;
+  current = fold(current, ["+", "−"], "");
+  if (!current || current.length !== 1 || !Number.isFinite(Number(current[0]))) return null;
+  return { steps, value: Number(current[0]) };
+}
+
+function compareSolution(left, right) {
+  const sign = Number(left) > Number(right) ? ">" : Number(left) < Number(right) ? "<" : "=";
+  const a = String(left);
+  const b = String(right);
+  if (a.length !== b.length) {
+    const longer = a.length > b.length ? left : right;
+    const shorter = a.length > b.length ? right : left;
+    return {
+      steps: [
+        `В числе ${longer} ${String(longer).length} цифр, в числе ${shorter} — ${String(shorter).length}.`,
+        `Сравниваем число разрядов: ${String(longer).length} > ${String(shorter).length}, поэтому ${longer} > ${shorter}.`,
+      ],
+      answerLine: `Ответ: ${sign}.`,
+    };
+  }
+  const names = ["единицы", "десятки", "сотни", "тысячи", "десятки тысяч", "сотни тысяч"];
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      const place = names[a.length - 1 - index] || "этот разряд";
+      const cmp = a[index] > b[index] ? ">" : "<";
+      return {
+        steps: [
+          `Сравниваем ${a} и ${b} слева направо.`,
+          `В разряде «${place}» цифры ${a[index]} и ${b[index]}. ${a[index]} ${cmp} ${b[index]}, поэтому ${a} ${sign} ${b}.`,
+        ],
+        answerLine: `Ответ: ${sign}.`,
+      };
+    }
+  }
+  return { steps: [`${a} и ${b} совпадают по всем разрядам: ${a} = ${b}.`], answerLine: "Ответ: =." };
+}
+
 function buildSolution(title, question) {
   const t = norm(title);
-  if (question.tokens?.length) {
-    const text = question.tokens.join(" ");
-    const steps = [];
-    if (question.tokens.includes("(")) steps.push("Сначала выполняем действие в скобках.");
-    if (question.tokens.some((token) => token === "×" || token === "÷")) steps.push("Умножение и деление выполняют раньше сложения и вычитания.");
-    if (!steps.length) steps.push("Считаем слева направо.");
-    steps.push(`${text} = ${question.answer}.`);
-    return { steps, answerLine: `Ответ: ${question.answer}.` };
+  const expression = question.tokens?.length ? question.tokens : question.scene?.kind === "ops" ? question.scene.tokens : null;
+  if (expression?.length) {
+    const explained = explainTokens(expression);
+    if (explained) return { steps: explained.steps, answerLine: `Ответ: ${explained.value}.` };
   }
-  if (t.startsWith("отрезок заданной")) return { steps: ["Точка A стоит на нуле линейки.", "Точку B ставим на отметке нужной длины."], answerLine: "Ответ — отрезок этой длины." };
-  if (t.startsWith("прямой угол")) return { steps: ["Прямой угол проверяют угольником: его стороны должны совпасть со сторонами угла."], answerLine: `Ответ: угол ${question.answer}.` };
-  if (t.startsWith("сравнение чисел") || t.startsWith("сравнение многозначных")) return { steps: ["Сравниваем числа по разрядам слева направо.", "Первый разряд, в котором цифры различаются, решает знак."], answerLine: `Ответ: ${question.answer}.` };
-  if (t.startsWith("рубли и копейки")) return { steps: ["1 р. — это 100 к.", `${question.prompt.replace("=", "").trim()} = ${question.answer} к.`], answerLine: `Ответ: ${question.answer} к.` };
-  if (t.startsWith("сложение и вычитание величин") || t.startsWith("умножение и деление величин")) return { steps: ["Сначала переводим величину в мелкие единицы.", "Потом выполняем действие и, если нужно, возвращаем крупные единицы."], answerLine: `Ответ: ${question.answer}.` };
-  if (t.startsWith("периметр многоугольника")) return { steps: ["Одинаковые чёрточки отмечают равные стороны.", "Периметр — сумма всех сторон."], answerLine: `Ответ: ${question.answer} см.` };
-  if (t.startsWith("окружность и круг")) return { steps: ["Радиус — отрезок от центра окружности до точки на ней."], answerLine: `Ответ: ${question.answer}.` };
-  if (t.startsWith("симметричный рисунок")) return { steps: ["Клетка по ту сторону прямой стоит на том же расстоянии, что и исходная."], answerLine: "Ответ — отражённые клетки." };
-  if (t.startsWith("разряды и классы") || t.startsWith("чтение и запись") || t.startsWith("умножение и деление на 10")) return { steps: ["Смотрим клетку в таблице классов.", "Цифра сдвигается на столько разрядов, сколько нулей в 10, 100 или 1000."], answerLine: `Ответ: ${question.answer}.` };
-  if (t.startsWith("единицы площади") || t.startsWith("единицы массы") || t.startsWith("единицы времени")) return { steps: ["Идём по лестнице единиц и умножаем или делим на указанный шаг."], answerLine: `Ответ: ${question.answer} ${question.suffix || ""}.`.replace(/\s+\./, ".") };
-  if (t.startsWith("порядок действий") || t.startsWith("примеры в три") || t.includes("четырех действий") || question.scene?.kind === "ops") return { steps: ["Нумеруем знаки.", "Скобки раньше, затем умножение и деление, затем сложение и вычитание слева направо."], answerLine: "Ответ — этот порядок." };
-  if (question.scene?.kind === "ops") return { steps: ["Нумеруем знаки.", "Скобки раньше, затем умножение и деление, затем сложение и вычитание слева направо."], answerLine: "Ответ — этот порядок." };
-  if (t.startsWith("прямоугольник по периметру")) return { steps: ["Половина периметра — сумма двух соседних сторон.", "От второй известной стороны откладываем соседнюю."], answerLine: "Ответ — две противоположные вершины." };
+  if ((t.startsWith("сравнение чисел") || t.startsWith("сравнение многозначных")) && question.left != null) return compareSolution(question.left, question.right);
+  if (question.scene?.kind === "poly-sides") {
+    const sides = question.scene.sides || [];
+    return { steps: ["Периметр — сумма всех сторон.", `${sides.join(" + ")} = ${question.answer}.`], answerLine: `Ответ: ${question.answer} см.` };
+  }
   return null;
 }
 

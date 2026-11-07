@@ -338,9 +338,9 @@ export function DictBoard({ question, phase, dispatch }) {
   const [done, setDone] = useState(0);
   const [hint, setHint] = useState("");
   useEffect(() => {
-    setDone(0);
+    setDone(phase === "reveal" ? steps.length : 0);
     setHint("");
-  }, [question.answer]);
+  }, [question.answer, phase, steps.length]);
   const { rows, cols, start, commands } = question.scene;
   const points = [start];
   let x = start[0];
@@ -398,6 +398,7 @@ export function DictBoard({ question, phase, dispatch }) {
           </button>
         ))}
       </div>
+      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
     </div>
   );
 }
@@ -512,20 +513,23 @@ export function FindBoard({ question, phase, dispatch }) {
     if (phase !== "answer") return;
     setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
+  const answers = new Set((question.answer || "").split("|").filter(Boolean));
   return (
     <div>
       <p className="prompt">{question.prompt}</p>
       <div className="find-grid">
         {(question.scene.items || question.scene.shapes || []).map((shape, index) => {
           const id = String(index);
+          const marked = picked.includes(id) || (phase === "reveal" && answers.has(id));
           return (
-            <button key={id} type="button" className={`find-cell ${picked.includes(id) ? "is-on" : ""}`} disabled={phase !== "answer"} onClick={() => toggle(id)}>
+            <button key={id} type="button" className={`find-cell ${marked ? "is-on" : ""}`} disabled={phase !== "answer"} onClick={() => toggle(id)} aria-pressed={marked}>
               {shape === "square" ? "■" : shape === "circle" ? "●" : "▲"}
             </button>
           );
         })}
       </div>
       <button type="button" className="btn" disabled={phase !== "answer"} onClick={() => dispatch({ type: "select-check", ids: picked })}>Проверить</button>
+      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
     </div>
   );
 }

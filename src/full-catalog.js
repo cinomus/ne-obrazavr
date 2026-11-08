@@ -1808,9 +1808,18 @@ function factorOf(title) {
 }
 
 function tableMul(title) {
-  const factor = factorOf(title) || ri(2, 9);
-  const other = factor > 10 ? ri(2, 9) : ri(1, 10);
-  return binary(factor, "×", other);
+  const factor = factorOf(title);
+  if (factor && factor > 10) return binary(factor, "×", ri(2, 9));
+  const row = factor || ri(2, 10);
+  const col = ri(1, 10);
+  return {
+    type: "number",
+    prompt: "Заполните пропуски в таблице умножения",
+    tokens: [],
+    answer: String(row * col),
+    expect: row * col,
+    scene: { kind: "pythagoras", row, col },
+  };
 }
 
 function tableDiv(title) {

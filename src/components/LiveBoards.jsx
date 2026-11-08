@@ -662,9 +662,10 @@ export function PythagorasTable({ question, shown, phase }) {
     cells.push(<div key={`r${r}`} className={`pyth-cell pyth-head ${r === row ? "is-on" : ""}`}>{r}</div>);
     for (let c = 1; c <= size; c += 1) {
       const blank = r === row && c === col;
+      const line = r === row || c === col;
       const value = phase === "reveal" ? row * col : shown;
       cells.push(
-        <div key={`${r}-${c}`} className={`pyth-cell ${blank ? "is-blank" : ""} ${blank && phase === "flash" ? "is-bad" : ""} ${blank && phase === "reveal" ? "is-show" : ""}`} aria-label={blank ? `${r} умножить на ${c}` : undefined}>
+        <div key={`${r}-${c}`} className={`pyth-cell ${line ? "is-line" : ""} ${blank ? "is-blank" : ""} ${blank && phase === "flash" ? "is-bad" : ""} ${blank && phase === "reveal" ? "is-show" : ""}`} aria-label={blank ? `${r} умножить на ${c}` : undefined}>
           {blank ? value || "" : r * c}
         </div>,
       );
@@ -701,11 +702,15 @@ export function MatrixTask({ question, phase, dispatch, tried }) {
       <p className="prompt">{question.prompt}</p>
       {question.speak ? <button type="button" className="btn secondary is-hidden" onClick={() => say(question.prompt)}>Прослушать задачу</button> : null}
       <div className="matrix-grid" role="img" aria-label="Таблица из фигур">
-        {question.scene.cells.map((cell, index) => (
-          <span key={index} className={`matrix-cell ${cell ? "" : "is-gap"} ${!cell && phase === "reveal" ? "is-filled" : ""}`}>
-            {cell ? <MatrixFigure shape={cell.shape} color={cell.color} /> : phase === "reveal" ? <MatrixFigure shape={shape} color={color} /> : <span className="matrix-mark">?</span>}
-          </span>
-        ))}
+        {question.scene.cells.map((cell, index) => {
+          const hole = question.scene.cells.findIndex((item) => !item);
+          const line = Math.floor(index / 3) === Math.floor(hole / 3) || index % 3 === hole % 3;
+          return (
+            <span key={index} className={`matrix-cell ${line ? "is-line" : ""} ${cell ? "" : "is-gap"} ${!cell && phase === "reveal" ? "is-filled" : ""}`}>
+              {cell ? <MatrixFigure shape={cell.shape} color={cell.color} /> : phase === "reveal" ? <MatrixFigure shape={shape} color={color} /> : <span className="matrix-mark">?</span>}
+            </span>
+          );
+        })}
       </div>
       <div className="matrix-choices">
         {question.choices.map((id) => {

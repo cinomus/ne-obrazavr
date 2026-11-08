@@ -356,8 +356,10 @@ export function NumericQuestion({ state, dispatch }) {
         <div className="num-grid" style={{ gridTemplateColumns: `repeat(${question.scene.columns}, minmax(0, 1fr))` }}>
           {question.scene.values.map((value) => {
             const hole = value === question.scene.hide;
+            const columns = question.scene.columns;
+            const line = Math.floor((value - 1) / columns) === Math.floor((question.scene.hide - 1) / columns) || (value - 1) % columns === (question.scene.hide - 1) % columns;
             return (
-              <span key={value} className={`seq-cell ${hole ? "seq-gap" : ""} ${hole && phase === "flash" ? "is-bad" : ""} ${hole && phase === "reveal" ? "is-show" : ""}`} aria-label={hole ? "Пропущенное число" : undefined}>
+              <span key={value} className={`seq-cell ${line ? "is-line" : ""} ${hole ? "seq-gap" : ""} ${hole && phase === "flash" ? "is-bad" : ""} ${hole && phase === "reveal" ? "is-show" : ""}`} aria-label={hole ? "Пропущенное число" : undefined}>
                 {hole ? (shown || "?") : value}
               </span>
             );

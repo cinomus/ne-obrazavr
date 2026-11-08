@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 const MARKS = [0.12, 0.2, 0.28];
 const MAX_MISSES = 3;
 const MODE_KEY = "ne-obrazavr-drops-mode";
-const KEYS_KEY = "ne-obrazavr-drops-keys";
 
 function rand(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
@@ -78,8 +77,7 @@ export function DropBoard() {
   const [flash, setFlash] = useState("");
   const [over, setOver] = useState(false);
   const [runId, setRunId] = useState(0);
-  const [mode, setMode] = useState(() => (localStorage.getItem(MODE_KEY) === "add_sub" ? "add_sub" : "all"));
-  const [keysOn, setKeysOn] = useState(() => localStorage.getItem(KEYS_KEY) !== "0");
+  const [mode] = useState(() => (localStorage.getItem(MODE_KEY) === "add_sub" ? "add_sub" : "all"));
 
   useEffect(() => {
     const field = fieldRef.current;
@@ -284,17 +282,6 @@ export function DropBoard() {
     };
   }, [mode, runId]);
 
-  function chooseMode(next) {
-    localStorage.setItem(MODE_KEY, next);
-    setMode(next);
-    setRunId((value) => value + 1);
-  }
-
-  function chooseKeys(shown) {
-    localStorage.setItem(KEYS_KEY, shown ? "1" : "0");
-    setKeysOn(shown);
-  }
-
   return (
     <div className="drop-game">
       <div className="drop-field" ref={fieldRef} aria-label="Игровое поле" style={{ "--floor": floor }}>
@@ -312,12 +299,13 @@ export function DropBoard() {
             aria-label={`${drop.sign} ${drop.top} ${drop.bottom}`}
           >
             {drop.golden ? <span className="drop-sun" /> : (
-              <svg viewBox="0 0 100 118" aria-hidden="true">
-                <path d="M50 4C66 26 90 48 94 70C104 100 80 114 50 114C20 114 -4 100 6 70C10 48 34 26 50 4Z" />
+              <svg className="drop-shape" viewBox="0 0 100 120" preserveAspectRatio="none" aria-hidden="true">
+                <path fill="#77d8ff" d="M50 1C61 18 78 36 88 57C101 85 82 118 50 118C18 118 -1 85 12 57C22 36 39 18 50 1Z" />
+                <path fill="#073d78" transform="translate(50 62) scale(0.94) translate(-50 -62)" d="M50 1C61 18 78 36 88 57C101 85 82 118 50 118C18 118 -1 85 12 57C22 36 39 18 50 1Z" />
               </svg>
             )}
-            <span className="drop-sign">{drop.sign}</span>
-            <span className="drop-figs">
+            <span className="drop-expr">
+              <span className="drop-sign">{drop.sign}</span>
               <b>{drop.top}</b>
               <b>{drop.bottom}</b>
             </span>
@@ -327,28 +315,14 @@ export function DropBoard() {
           <input aria-label="Ответ" placeholder="Ваш ответ" value={typed.replace("-", "−")} readOnly />
         </label>
       </div>
-      {keysOn ? (
-        <div className="drop-keys" aria-label="Клавиатура">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "0", "back"].map((key) => (
-            <button key={key} type="button" className="drop-key" disabled={over} onClick={() => pressRef.current(key)}>
-              {key === "-" ? "−" : key === "back" ? "⌫" : key}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="drop-setup">
-        <p>Действия</p>
-        <div>
-          <button type="button" className={mode === "add_sub" ? "btn secondary is-on" : "btn secondary"} onClick={() => chooseMode("add_sub")}>Сложение и вычитание</button>
-          <button type="button" className={mode === "all" ? "btn secondary is-on" : "btn secondary"} onClick={() => chooseMode("all")}>Все действия</button>
-        </div>
-        <p>Клавиатура</p>
-        <div>
-          <button type="button" className={keysOn ? "btn secondary is-on" : "btn secondary"} onClick={() => chooseKeys(true)}>Показать</button>
-          <button type="button" className={!keysOn ? "btn secondary is-on" : "btn secondary"} onClick={() => chooseKeys(false)}>Скрыть</button>
-        </div>
-        {over ? <button type="button" className="btn secondary" onClick={() => setRunId((value) => value + 1)}>Начать новую тренировку</button> : null}
+      <div className="drop-keys" aria-label="Клавиатура">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "0", "back"].map((key) => (
+          <button key={key} type="button" className="drop-key" disabled={over} onClick={() => pressRef.current(key)}>
+            {key === "-" ? "−" : key === "back" ? "⌫" : key}
+          </button>
+        ))}
       </div>
+      {over ? <button type="button" className="btn secondary" onClick={() => setRunId((value) => value + 1)}>Начать новую тренировку</button> : null}
     </div>
   );
 }

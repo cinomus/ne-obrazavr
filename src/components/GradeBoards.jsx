@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Scene } from "./Scene";
-import { SolutionBlock, StoryPicture, StoryScheme, StorySchemeButton } from "./LiveBoards";
+import { SceneArt, SolutionBlock, StoryScheme, StorySchemeButton } from "./LiveBoards";
 
 function BareChoices({ question, phase, dispatch, tried }) {
   return (
@@ -77,7 +77,7 @@ function OpChoice({ question, phase, dispatch, tried, showSolution }) {
         </div>
       </div>
       <div className="op-art">
-        {scheme ? <StoryScheme scene={scene} solved={solved} /> : <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 4)} />}
+        {scheme ? <StoryScheme scene={scene} solved={solved} /> : <SceneArt kind={scene.picture} />}
       </div>
       {showSolution ? <SolutionBlock solution={question.solution} onNext={() => dispatch({ type: "next" })} /> : null}
     </div>
@@ -89,7 +89,7 @@ export function ChoiceScene({ question, phase, dispatch, tried, showSolution = f
   if (scene?.beside) return <OpChoice question={question} phase={phase} dispatch={dispatch} tried={tried} showSolution={showSolution} />;
   return (
     <div className="choice-scene">
-      {scene.kind === "story" ? <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 6)} /> : null}
+      {scene.kind === "story" ? <SceneArt kind={scene.picture} /> : null}
       {question.speak ? <button type="button" className="btn secondary is-hidden" onClick={() => speakLine(question.prompt)}>Прослушать задачу</button> : null}
       {question.prompt && scene.kind !== "hear" ? <p className="prompt">{question.prompt}</p> : null}
       {scene.kind === "story" ? (
@@ -248,7 +248,9 @@ export function ChoiceScene({ question, phase, dispatch, tried, showSolution = f
       {scene.kind === "spot" ? (
         <svg viewBox="0 0 220 140" className="angle-board" role="img" aria-label="где стоит">
           <rect x="16" y="16" width="188" height="108" fill="#fff7e8" stroke="#1c2b24" strokeWidth="4" />
-          <circle cx={scene.spot === "Вверху" ? 110 : scene.spot === "Внизу" ? 110 : 28} cy={scene.spot === "Вверху" ? 36 : scene.spot === "Внизу" ? 104 : 104} r="12" fill="#e23b32" stroke="#1c2b24" strokeWidth="3" />
+          {scene.items ? scene.items.map((item) => (
+            <text key={item.name} x={item.x} y={item.y} textAnchor="middle" fontSize="13" fontWeight="700" fill="#1c2b24">{item.name}</text>
+          )) : <circle cx={scene.spot === "Вверху" ? 110 : scene.spot === "Внизу" ? 110 : 28} cy={scene.spot === "Вверху" ? 36 : scene.spot === "Внизу" ? 104 : 104} r="12" fill="#e23b32" stroke="#1c2b24" strokeWidth="3" />}
         </svg>
       ) : null}
       {scene.kind === "inside" ? (
@@ -342,10 +344,12 @@ export function SortBoard({ question, phase, dispatch, tried }) {
   );
 }
 
-export function OpsBoard({ question, phase, dispatch }) {
+export function OpsBoard({ question, phase, dispatch, showSolution = false }) {
   const [picked, setPicked] = useState([]);
   useEffect(() => setPicked([]), [question.answer]);
   const ops = question.scene.tokens.map((token, index) => ({ token, index })).filter((item) => ["+", "−", "×", "÷", "·", ":"].includes(item.token));
+  const order = (question.answer || "").split("|");
+  const showRanks = phase === "reveal" || showSolution;
   function take(index) {
     if (phase !== "answer" || picked.includes(String(index))) return;
     const next = [...picked, String(index)];
@@ -353,16 +357,20 @@ export function OpsBoard({ question, phase, dispatch }) {
     if (next.length === ops.length) dispatch({ type: "select-check", ids: next });
   }
   return (
-    <div>
+    <div className="ops-task">
       <p className="prompt">{question.prompt}</p>
-      <div className="eq ops-line">
+      <div className={`eq ops-line ${showRanks ? "is-marked" : ""}`}>
         {question.scene.tokens.map((token, index) => {
           const op = ["+", "−", "×", "÷", "·", ":"].includes(token);
           if (!op) return <span key={index} className="num">{token}</span>;
+          const rank = order.indexOf(String(index));
           return (
-            <button key={index} type="button" className={`op-btn ${picked.includes(String(index)) ? "is-on" : ""}`} disabled={phase !== "answer"} onClick={() => take(index)}>
-              {token}
-            </button>
+            <span key={index} className="op-slot">
+              {showRanks && rank >= 0 ? <span className="op-rank">{rank + 1}</span> : null}
+              <button type="button" className={`op-btn ${picked.includes(String(index)) ? "is-on" : ""}`} disabled={phase !== "answer"} onClick={() => take(index)}>
+                {token}
+              </button>
+            </span>
           );
         })}
       </div>
@@ -417,7 +425,7 @@ export function DictBoard({ question, phase, dispatch }) {
       <p className="prompt">{question.prompt}</p>
       <div className="dict-commands" aria-label="Стрелки">
         {commands.map(([dir, count], index) => (
-          <span key={`${dir}-${index}`} className={`dict-command ${index < commandIndex || (commandIndex < 0 && phase !== "answer") ? "is-done" : ""} ${index === commandIndex ? "is-now" : ""}`}>
+          <span key={`${dir}-${index}`} className={`dict-command ${index < commandIndex ? "is-done" : ""} ${index === commandIndex ? "is-now" : ""}`}>
             {Array.from({ length: count }, (_, arrow) => <Arrow key={arrow} dir={dir} />)}
           </span>
         ))}
@@ -425,7 +433,7 @@ export function DictBoard({ question, phase, dispatch }) {
       <svg className="dict-board" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Поле в клетку">
         {Array.from({ length: cols }, (_, index) => <line key={`v${index}`} x1={pad + index * size} y1={pad} x2={pad + index * size} y2={height - pad} className="dict-grid-line" />)}
         {Array.from({ length: rows }, (_, index) => <line key={`h${index}`} x1={pad} y1={pad + index * size} x2={width - pad} y2={pad + index * size} className="dict-grid-line" />)}
-        <polyline points={points.map((point) => at(point).join(",")).join(" ")} className="dict-ink" />
+        <polyline points={points.map((point) => at(point).join(",")).join(" ")} className={`dict-ink ${phase === "reveal" ? "is-answer" : ""}`} />
         <circle cx={at(start)[0]} cy={at(start)[1]} r="6" className="dict-start" />
         <circle cx={at(points.at(-1))[0]} cy={at(points.at(-1))[1]} r="5" className="dict-pen" />
       </svg>
@@ -437,7 +445,7 @@ export function DictBoard({ question, phase, dispatch }) {
           </button>
         ))}
       </div>
-      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
+      {phase === "reveal" ? <button type="button" className="btn secondary next-pill" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
     </div>
   );
 }
@@ -545,6 +553,18 @@ export function HalfBoard({ question, phase, dispatch }) {
   );
 }
 
+function SquareMark({ x, y, size }) {
+  const s = 8;
+  return (
+    <g className="find-mark" aria-hidden="true">
+      <path d={`M${x} ${y + s} V${y} H${x + s}`} />
+      <path d={`M${x + size - s} ${y} H${x + size} V${y + s}`} />
+      <path d={`M${x + size} ${y + size - s} V${y + size} H${x + size - s}`} />
+      <path d={`M${x + s} ${y + size} H${x} V${y + size - s}`} />
+    </g>
+  );
+}
+
 export function FindBoard({ question, phase, dispatch }) {
   const [picked, setPicked] = useState([]);
   useEffect(() => setPicked([]), [question.answer]);
@@ -553,22 +573,34 @@ export function FindBoard({ question, phase, dispatch }) {
     setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
   const answers = new Set((question.answer || "").split("|").filter(Boolean));
+  const windows = [
+    { id: "left", x: 78, y: 92 },
+    { id: "right", x: 206, y: 92 },
+  ];
   return (
-    <div>
+    <div className="find-task">
       <p className="prompt">{question.prompt}</p>
-      <div className="find-grid">
-        {(question.scene.items || question.scene.shapes || []).map((shape, index) => {
-          const id = String(index);
-          const marked = picked.includes(id) || (phase === "reveal" && answers.has(id));
+      <svg className="find-picture" viewBox="0 0 320 230" role="img" aria-label="Башня с окнами">
+        <polygon points="70,78 108,28 146,78" fill="#7eb6e0" stroke="#1c2b24" strokeWidth="3" />
+        <polygon points="174,78 212,28 250,78" fill="#7eb6e0" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="78" y="78" width="68" height="110" fill="#d5dbe3" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="174" y="78" width="68" height="110" fill="#d5dbe3" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="146" y="108" width="28" height="80" fill="#e7edf2" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="150" y="132" width="20" height="36" fill="#c4922e" stroke="#1c2b24" strokeWidth="3" />
+        {windows.map((win) => {
+          const marked = picked.includes(win.id) || (phase === "reveal" && answers.has(win.id));
           return (
-            <button key={id} type="button" className={`find-cell ${marked ? "is-on" : ""}`} disabled={phase !== "answer"} onClick={() => toggle(id)} aria-pressed={marked}>
-              {shape === "square" ? "■" : shape === "circle" ? "●" : "▲"}
-            </button>
+            <g key={win.id}>
+              <rect x={win.x} y={win.y} width="36" height="36" fill="#2a3540" stroke="#1c2b24" strokeWidth="3" />
+              {marked ? <SquareMark x={win.x - 4} y={win.y - 4} size={44} /> : null}
+              <rect x={win.x} y={win.y} width="36" height="36" fill="transparent" className="find-hit" onClick={() => toggle(win.id)} />
+            </g>
           );
         })}
-      </div>
-      <button type="button" className="btn" disabled={phase !== "answer"} onClick={() => dispatch({ type: "select-check", ids: picked })}>Проверить</button>
-      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
+      </svg>
+      {phase === "reveal" ? <button type="button" className="btn secondary next-pill" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : (
+        <button type="button" className="btn secondary" disabled={phase !== "answer"} onClick={() => dispatch({ type: "select-check", ids: picked })}>Проверить</button>
+      )}
     </div>
   );
 }

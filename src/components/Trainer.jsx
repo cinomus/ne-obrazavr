@@ -121,6 +121,26 @@ function QuestionViewConnected({ state, dispatch }) {
   if (question.scene?.kind === "ribbons") return <Ribbons question={question} phase={phase} dispatch={dispatch} tried={tried} />;
   if (["center", "segments", "points", "shapes"].includes(question.scene?.kind)) return <CircleCenter question={question} phase={phase} dispatch={dispatch} tried={tried} />;
   if (question.scene?.kind === "places") return <PlaceTable question={question} phase={phase} dispatch={dispatch} tried={tried} />;
+  if (question.scene?.kind === "max") {
+    return (
+      <div className="max-task">
+        <p className="prompt">{question.prompt}</p>
+        <div className="max-grid">
+          {question.choices.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={choiceClass(phase, tried.includes(option), phase === "reveal" && question.answer === option)}
+              disabled={phase !== "answer"}
+              onClick={() => dispatch({ type: "choice", value: option })}
+            >
+              <strong>{option}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (question.scene && ["clock-hands", "pick", "more"].includes(question.scene.kind)) {
     return (
@@ -190,8 +210,41 @@ function QuestionViewConnected({ state, dispatch }) {
   );
 }
 
+function PlaceDigits({ heads, rows, mark, winner = -1, tone = "win" }) {
+  return (
+    <div className="place-board">
+      <div className="place-heads">{heads.map((head) => <span key={head}>{head}</span>)}</div>
+      {rows.map((row, rowIndex) => (
+        <div key={`${row.join("")}-${rowIndex}`} className="place-row">
+          {row.map((digit, index) => {
+            const marked = index === mark;
+            const klass = marked && tone === "zero" ? "is-zero" : marked && rowIndex === winner ? "is-winner" : marked ? "is-mark" : "";
+            return <span key={`${rowIndex}-${index}`} className={klass}>{digit}</span>;
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Worked({ question }) {
-  return <SolutionBlock solution={question.solution} />;
+  const scene = question.scene || {};
+  let table = null;
+  if (scene.kind === "places-sum") {
+    table = <PlaceDigits heads={["сотни", "десятки", "единицы"]} rows={[[String(scene.hundreds), String(scene.tens), String(scene.ones)]]} mark={scene.zero} tone="zero" />;
+  }
+  if (scene.kind === "max") {
+    const width = Math.max(...scene.numbers.map((value) => String(value).length));
+    const rows = scene.numbers.map((value) => String(value).padStart(width, "0").split(""));
+    const winner = scene.numbers.findIndex((value) => String(value) === String(question.answer));
+    table = <PlaceDigits heads={scene.placeNames} rows={rows} mark={scene.place} winner={winner} />;
+  }
+  return (
+    <>
+      {table}
+      <SolutionBlock solution={question.solution} />
+    </>
+  );
 }
 
 function HearButton({ speech, token, compact = false }) {
@@ -262,11 +315,12 @@ function PaintBoard({ question, phase, dispatch, badPaint }) {
           const filled = given.has(key);
           const revealed = phase === "reveal" && (question.needed || []).some((cell) => cell.join(":") === key);
           const locked = filled || lockedEmpty.has(key);
+          const painted = marks.has(key) || revealed;
           return (
             <button
               key={key}
               type="button"
-              className={`paint-cell ${filled || marks.has(key) || revealed ? "filled-cell" : "empty-cell"} ${extras.has(key) ? "is-wrong" : ""} ${lockedEmpty.has(key) ? "is-locked" : ""}`}
+              className={`paint-cell ${filled ? "is-given" : "empty-cell"} ${painted ? "is-shown" : ""} ${extras.has(key) ? "is-wrong" : ""} ${lockedEmpty.has(key) ? "is-locked" : ""}`}
               disabled={phase !== "answer" || locked}
               onClick={() => toggle(row, col)}
             />
@@ -275,15 +329,15 @@ function PaintBoard({ question, phase, dispatch, badPaint }) {
       </div>
       <span className="mirror-axis" aria-hidden="true" />
       </div>
-      {phase === "reveal" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
       <div className="paint-actions">
-        <button type="button" className="btn" disabled={phase !== "answer"} onClick={check}>
+        <button type="button" className="btn secondary" disabled={phase !== "answer"} onClick={check}>
           Проверить
         </button>
         <button type="button" className="btn secondary" disabled={phase !== "answer"} onClick={() => setPainted([])}>
           Очистить
         </button>
       </div>
+      {phase === "reveal" ? <button type="button" className="btn secondary next-pill" onClick={() => dispatch({ type: "next" })}>ДАЛЕЕ</button> : null}
     </>
   );
 }
@@ -302,7 +356,7 @@ export function NumericQuestion({ state, dispatch }) {
   }
   if (question.picture?.entry) {
     const [each, groups, total] = question.picture.entry;
-    const raw = phase === "reveal" && question.pictureRevealSum ? "" : phase === "reveal" ? question.picture.entry.join("") : input;
+    const raw = phase === "reveal" ? question.picture.entry.join("") : input;
     const first = raw.slice(0, each.length);
     const second = raw.slice(each.length, each.length + groups.length);
     const third = raw.slice(each.length + groups.length);
@@ -315,11 +369,10 @@ export function NumericQuestion({ state, dispatch }) {
       held && second.length === groups.length && typedGroups !== question.picture.groups,
       held && third.length === total.length && typedTotal !== question.picture.each * question.picture.groups,
     ];
-    const intro = state.primaryDone === 0 && !question.isReplay ? " Запишите умножением" : "";
     const active = first.length < each.length ? 0 : second.length < groups.length ? 1 : 2;
     return (
       <div className="picture-task">
-        <p className="prompt">{question.prompt}{intro}</p>
+        <p className="prompt">{question.prompt}</p>
         <PictureGroups picture={question.picture} showCounts={phase === "reveal"} />
         <p className={`picture-note ${held ? "is-hint" : ""} ${phase === "reveal" ? "is-sum" : ""}`}>
           {phase === "reveal" ? question.picture.sum : state.pictureHint || "\u00a0"}
@@ -332,7 +385,7 @@ export function NumericQuestion({ state, dispatch }) {
           <Blank value={third} phase={bad[2] ? "flash" : phase} active={phase === "answer" && active === 2} label="Сколько всего" />
         </div>
         {phase === "reveal" ? (
-          <button type="button" className="btn secondary" onClick={() => dispatch({ type: "tick-reveal" })}>Далее</button>
+          <button type="button" className="btn secondary next-pill" onClick={() => dispatch({ type: "tick-reveal" })}>ДАЛЕЕ</button>
         ) : null}
       </div>
     );
@@ -605,7 +658,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
               ) : state.question.type === "select" && state.question.scene?.kind === "sort" ? (
                 <SortBoard question={state.question} phase={state.phase} dispatch={dispatch} tried={state.tried} />
               ) : state.question.type === "select" && state.question.scene?.kind === "ops" ? (
-                <OpsBoard question={state.question} phase={state.phase} dispatch={dispatch} />
+                <OpsBoard question={state.question} phase={state.phase} dispatch={dispatch} showSolution={state.showSolution} />
               ) : state.question.type === "select" && state.question.scene?.kind === "dict" ? (
                 <DictBoard question={state.question} phase={state.phase} dispatch={dispatch} />
               ) : state.question.type === "select" && state.question.scene?.kind === "half" ? (
@@ -629,7 +682,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
               )}
             </div>
 
-            {state.showSolution && state.question.scene?.kind !== "story" ? <Worked question={state.question} /> : null}
+            {state.question.scene?.kind !== "story" && (state.showSolution || (state.phase === "reveal" && state.question.revealExplains)) ? <Worked question={state.question} /> : null}
             {state.hintText ? <p className="hint">{state.hintText}</p> : null}
 
             <p className={`status status-${state.status?.kind || "idle"}`} role="status" aria-live="polite">
@@ -646,8 +699,8 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
               </p>}
               {state.question.rule ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "hint", kind: "rule" })}>ПРАВИЛО</button> : null}
               {state.question.help ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "hint", kind: "help" })}>ПОМОЩЬ</button> : null}
-              {state.question.solution && state.question.scene?.kind !== "story" ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "explain" })}>Показать решение</button> : null}
-              {state.question.check && state.phase === "answer" ? <button type="button" className="btn" onClick={() => dispatch({ type: "commit" })}>ПРОВЕРИТЬ</button> : null}
+              {state.question.solution && state.question.scene?.kind !== "story" && !state.question.revealExplains ? <button type="button" className="text-btn" onClick={() => dispatch({ type: "explain" })}>Показать решение</button> : null}
+              {state.question.check && state.phase === "answer" ? <button type="button" className="btn secondary" onClick={() => dispatch({ type: "commit" })}>ПРОВЕРИТЬ</button> : null}
               {state.question.hideSkip ? null : (
                 <button type="button" className="text-btn" onClick={() => dispatch({ type: "reveal" })}>
                   {state.question.revealLabel || state.question.skipLabel || "Не знаю"}

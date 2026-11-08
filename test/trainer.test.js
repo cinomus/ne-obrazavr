@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as esbuild from "esbuild";
 import { pathToFileURL } from "node:url";
 import { everyTopic, GRADES } from "../src/curriculum.js";
+import { LIVE_CARDS } from "./live-cards.js";
 import { assertQuestion, evalTokens, questionKey } from "../src/question.js";
 import { initSession, reduceSession, RUN_LENGTH } from "../src/session.js";
 
@@ -96,7 +97,7 @@ function submit(state, topic, ops, value) {
 test("в каждом классе есть темы, и счётчики совпадают с живым списком", () => {
   assert.deepEqual(
     GRADES.map((grade) => grade.chapters.reduce((sum, chapter) => sum + chapter.topics.length, 0)),
-    [83, 76, 103, 137],
+    [83, 77, 103, 137],
   );
   const ids = new Set();
   for (const grade of GRADES) {
@@ -400,3 +401,107 @@ test("сравнение, столбик и выбор: верный знак п
     assert.equal(solved.stats.firstCorrect, 1);
   }
 });
+
+function liveTitle(text) {
+  return text.toLowerCase().replace(/ё/g, "е").replace(/образавр/g, "фигурка").replace(/\s+/g, " ").replace(/[–—-]/g, "-").trim();
+}
+
+const LIVE_TOPICS = new Map();
+for (const grade of GRADES) {
+  for (const chapter of grade.chapters) {
+    for (const topic of chapter.topics) LIVE_TOPICS.set(`${grade.id}|${liveTitle(chapter.title)}|${liveTitle(topic.title)}`, topic);
+  }
+}
+
+const LIVE_OP = { "×": "×", x: "×", "·": "×", "∙": "×", "+": "+", "−": "−", "-": "−", "–": "−", ":": "÷", "÷": "÷" };
+
+function liveOps(text) {
+  const ops = [];
+  for (const ch of text || "") if (LIVE_OP[ch]) ops.push(LIVE_OP[ch]);
+  return ops;
+}
+
+function liveLeadingOps(text) {
+  const clean = (text || "").trim();
+  if (/знаки действий/.test(clean)) return [];
+  const first = clean.match(/^[0-9]+\s*([×x·∙+−–:÷])/);
+  if (first) return [LIVE_OP[first[1]]];
+  const named = clean.match(/^Найдите (?:значение выражения|произведение|частное|разность|сумму)\s+/);
+  if (!named) return [];
+  return [...new Set(liveOps(clean.slice(named[0].length).split(/\s+Ответ\b/)[0]))];
+}
+
+function liveFamily(question) {
+  const kind = question.scene?.kind || "";
+  if (kind === "drop") return "drops";
+  if (kind.startsWith("clock")) return "clock";
+  if (question.work || question.type === "column") return "column";
+  if (["pythagoras", "grid", "matrix"].includes(kind) || /таблиц/i.test(question.prompt || "")) return "table";
+  if (question.tokens?.length) return "equation";
+  if (question.type === "compare") return "compare";
+  if (kind === "max") return "greatest";
+  if (question.prompt && question.prompt.includes("?")) return "sentence";
+  return "scene";
+}
+
+function liveShownOk(shown, samples) {
+  const families = new Set(samples.map(liveFamily));
+  const has = (...names) => names.some((name) => families.has(name));
+  if (shown.startsWith("drops")) return has("drops");
+  if (shown.startsWith("a clock")) return has("clock");
+  if (shown.startsWith("a column")) return has("column");
+  if (shown.startsWith("a table")) return has("table");
+  if (shown.startsWith("a picture plus")) return has("sentence");
+  return true;
+}
+
+function liveTypesDigits(question) {
+  if (["number", "commit", "steps", "column"].includes(question.type)) return true;
+  return question.type === "choice" && (question.choices || []).every((choice) => /^-?\d+$/.test(String(choice)));
+}
+
+function liveDescribe(question) {
+  return [question.type, question.prompt ? question.prompt.slice(0, 80) : "", question.tokens?.length ? question.tokens.join(" ") : "", question.scene?.kind || ""].filter(Boolean).join(" · ");
+}
+
+function liveHasFactor(question, factor) {
+  if ((question.tokens || []).includes(factor)) return true;
+  return new RegExp(`(^|\\D)${factor}(\\D|$)`).test(question.prompt || "");
+}
+
+for (const card of LIVE_CARDS) {
+  test(`${card.g} класс. ${card.t}`, () => {
+    const topic = LIVE_TOPICS.get(`${card.g}|${liveTitle(card.c)}|${liveTitle(card.t)}`);
+    assert.ok(topic, `original: раздел «${card.c}», карточка «${card.t}». ours: нет такой карточки`);
+    const samples = [];
+    for (let sample = 0; sample < 20; sample += 1) {
+      const question = topic.make(topic.setup?.ops);
+      assertQuestion(question);
+      samples.push(question);
+    }
+    const problems = [];
+    if (!liveShownOk(card.shown, samples)) {
+      problems.push(`original: показано «${card.shown}», пример «${card.card.slice(0, 80)}». ours: ${liveDescribe(samples[0])}`);
+    }
+    if (/клавиатур|цифры на клавиатуре/i.test(card.child) && samples.some((question) => !liveTypesDigits(question))) {
+      problems.push(`original: ребенок вводит цифры. ours: ${liveDescribe(samples.find((question) => !liveTypesDigits(question)))}`);
+    }
+    const needed = [...new Set([...liveLeadingOps(card.card), ...liveLeadingOps(card.next)])];
+    if (needed.length && samples.every((question) => question.scene?.kind !== "ops") && !card.shown.startsWith("a column")) {
+      const got = new Set();
+      for (const question of samples) {
+        for (const token of question.tokens || []) if (LIVE_OP[token]) got.add(LIVE_OP[token]);
+        for (const op of liveOps(question.prompt)) got.add(op);
+      }
+      for (const op of needed) {
+        if (!got.has(op)) problems.push(`original: действие ${op} в «${card.card.slice(0, 80)}». ours: ${[...got].join(", ") || liveDescribe(samples[0])}`);
+      }
+      const factor = card.t.match(/на (\d+)/);
+      if (factor && /таблица/i.test(card.t)) {
+        const miss = samples.find((question) => !liveHasFactor(question, factor[1]));
+        if (miss) problems.push(`original: таблица на ${factor[1]}. ours: ${liveDescribe(miss)}`);
+      }
+    }
+    assert.deepEqual(problems, []);
+  });
+}

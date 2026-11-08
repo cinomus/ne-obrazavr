@@ -32,7 +32,7 @@ function Cubes({ count, tone, faded = 0 }) {
 
 function CheckButton({ phase, onClick, label = "Проверить" }) {
   return (
-    <button type="button" className="btn" disabled={phase !== "answer"} onClick={onClick}>
+    <button type="button" className="btn secondary" disabled={phase !== "answer"} onClick={onClick}>
       {label}
     </button>
   );
@@ -862,6 +862,98 @@ function RemoveScheme({ total, taken, solved }) {
   return <NumberStrip top={String(total)} aria={solved ? `Схема: осталось ${solved}` : `Схема: было ${total}, убрали ${taken}, осталось неизвестно`} parts={parts.length ? parts : [{ value: 1, label: mark, solved: Boolean(solved) }]} />;
 }
 
+function SchemePill({ x, y, text, tone = "" }) {
+  const label = String(text);
+  const width = Math.max(34, label.length * 8 + 18);
+  return (
+    <g className={`scheme-pill ${tone}`}>
+      <rect x={x - width / 2} y={y - 13} width={width} height={26} rx="13" />
+      <text x={x} y={y + 4} textAnchor="middle" className="scheme-pill-text">{label}</text>
+    </g>
+  );
+}
+
+function ResultMark({ x, y, text, solved }) {
+  return (
+    <g className={solved ? "is-solved" : ""}>
+      <circle cx={x} cy={y} r="14" className="scheme-result" />
+      <text x={x} y={y + 5} textAnchor="middle" className="scheme-result-text">{text}</text>
+    </g>
+  );
+}
+
+function DotCompare({ names, a, b, solved }) {
+  const mark = solved || "?";
+  const gap = 18;
+  const r = 7;
+  const x0 = 148;
+  const y1 = 78;
+  const y2 = 122;
+  const bigger = a >= b ? 1 : 2;
+  const extraStart = Math.min(a, b);
+  const extraCount = Math.abs(a - b);
+  const rowY = bigger === 1 ? y1 : y2;
+  const x1 = x0 + extraStart * gap - gap / 2;
+  const x2 = x0 + (extraStart + extraCount - 1) * gap + gap / 2;
+  const mid = extraCount ? (x1 + x2) / 2 : x0;
+  return (
+    <div className="scheme-sheet">
+      <svg className="scheme-draw" viewBox="0 0 460 176" role="img" aria-label={solved ? `Схема: разница ${solved}` : "Схема: разница неизвестна"}>
+        <text x="8" y={y1 + 5} className="scheme-label scheme-name">{names[0]}</text>
+        <text x="8" y={y2 + 5} className="scheme-label scheme-name">{names[1]}</text>
+        {Array.from({ length: a }, (_, index) => <circle key={`a${index}`} cx={x0 + index * gap} cy={y1} r={r} className="scheme-dot" style={{ "--i": index }} />)}
+        {Array.from({ length: b }, (_, index) => <circle key={`b${index}`} cx={x0 + index * gap} cy={y2} r={r} className="scheme-dot is-second" style={{ "--i": index }} />)}
+        <SchemePill x={x0 + Math.max(a, 1) * gap + 16} y={y1} text={a} />
+        <SchemePill x={x0 + Math.max(b, 1) * gap + 16} y={y2} text={b} />
+        {extraCount ? (
+          <>
+            <path d={`M${x1} ${rowY - 16} H${x2} M${mid} ${rowY - 16} V${rowY - 28}`} className="scheme-brace is-result" />
+            <ResultMark x={mid} y={rowY - 44} text={mark} solved={Boolean(solved)} />
+          </>
+        ) : <ResultMark x={x0} y={20} text={mark} solved={Boolean(solved)} />}
+      </svg>
+    </div>
+  );
+}
+
+function BarCompare({ names, a, extra, mode, phrase, solved }) {
+  const less = mode === "less";
+  const total = less ? Math.max(a, 1) : Math.max(a + extra, 1);
+  const known = less ? Math.max(a - extra, 0) : a;
+  const span = 250;
+  const base = Math.max(72, Math.round(span * (known / total)));
+  const added = Math.max(40, Math.round(span * (Math.max(extra, 1) / total)));
+  const x0 = 132;
+  const y1 = 42;
+  const y2 = 102;
+  const h = 26;
+  const whole = less ? base + added : base;
+  const secondSolid = less ? base : base;
+  const secondDash = added;
+  const mark = solved || "?";
+  const braceX1 = less ? x0 : x0;
+  const braceX2 = less ? x0 + secondSolid : x0 + secondSolid + secondDash;
+  const mid = (braceX1 + braceX2) / 2;
+  const phraseX = x0 + secondSolid + secondDash / 2;
+  return (
+    <div className="scheme-sheet">
+      <svg className="scheme-draw" viewBox="0 0 520 228" role="img" aria-label={solved ? `Схема: ${solved}` : "Схема сравнения"}>
+        <text x="6" y={y1 + 18} className="scheme-label scheme-name">{names[0]}</text>
+        <rect x={x0} y={y1} width={whole} height={h} rx="3" className="scheme-bar" style={{ "--i": 0 }} />
+        <path d={`M${x0 + 10} ${y1} Q${x0 + whole / 2} ${y1 - 12} ${x0 + whole - 10} ${y1}`} className="scheme-brace" />
+        <SchemePill x={x0 + whole / 2} y={y1 - 24} text={a} />
+        <text x="6" y={y2 + 18} className="scheme-label scheme-name">{names[1]}</text>
+        <rect x={x0} y={y2} width={secondSolid} height={h} rx="3" className="scheme-bar is-second" style={{ "--i": 1 }} />
+        <rect x={x0 + secondSolid} y={y2} width={secondDash} height={h} rx="3" className="scheme-bar is-dashed" style={{ "--i": 2 }} />
+        <path d={`M${phraseX - 16} ${y2 + h} Q${phraseX} ${y2 + h + 12} ${phraseX + 16} ${y2 + h}`} className="scheme-brace" />
+        <SchemePill x={phraseX} y={y2 + h + 22} text={phrase} tone="is-note" />
+        <path d={`M${braceX1} ${y2 + h + 36} H${braceX2} M${mid - 14} ${y2 + h + 36} Q${mid} ${y2 + h + 50} ${mid + 14} ${y2 + h + 36}`} className="scheme-brace is-result" />
+        <ResultMark x={mid} y={y2 + h + 68} text={mark} solved={Boolean(solved)} />
+      </svg>
+    </div>
+  );
+}
+
 function RelationScheme({ scene, solved }) {
   const names = scene.names || ["1-я", "2-я"];
   const a = Math.max(0, Number(scene.a) || 0);
@@ -877,43 +969,41 @@ function RelationScheme({ scene, solved }) {
   const mark = solved || "?";
   const phrase = scene.diffText || "";
   const barAt = (y, w, tone, i) => <rect x="148" y={y} width={w} height="36" className={`scheme-frame is-bar ${tone || ""}`} style={{ "--i": i }} />;
+  if (mode === "compare" && a <= 12 && extra <= 12) {
+    return <DotCompare names={names} a={a} b={extra} solved={solved} />;
+  }
+  if (mode === "more" || mode === "less") {
+    return <BarCompare names={names} a={a} extra={extra} mode={mode} phrase={phrase} solved={solved} />;
+  }
   let rows;
-  if (mode === "less") {
-    const whole = width(a);
-    const left = width(Math.max(a - extra, 1));
-    rows = (
-      <>
-        <text x="8" y="58" className="scheme-label scheme-name">{names[0]}</text>
-        {barAt(36, whole, "", 0)}
-        <text x={158 + whole} y="58" className="scheme-label">{a}</text>
-        <text x="8" y="136" className="scheme-label scheme-name">{names[1]}</text>
-        {barAt(114, left, "is-second", 1)}
-        <path d={`M${148 + left} 108 H${148 + whole} M${148 + left} 108 V118 M${148 + whole} 108 V118`} className="scheme-brace" />
-        <text x={148 + (left + whole) / 2} y="100" textAnchor="middle" className="scheme-label">{phrase}</text>
-        <text x={158 + left} y="136" className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
-      </>
-    );
-  } else if (mode === "more") {
-    const total = Math.max(a + extra, 1);
-    const base = Math.max(96, Math.round(180 * (a / total)));
-    const added = Math.max(26, Math.round(180 * (extra / total)));
+  if (mode === "compare") {
+    const wa = width(a);
+    const wb = width(extra);
+    const longer = Math.max(wa, wb);
+    const shorter = Math.min(wa, wb);
     const x0 = 132;
-    const y1 = 18;
-    const y2 = 86;
-    const h = 30;
-    rows = (
-      <>
-        <text x="0" y={y1 + 21} className="scheme-label scheme-name">{names[0]}</text>
-        <rect x={x0} y={y1} width={base} height={h} className="scheme-frame is-bar" style={{ "--i": 0 }} />
-        <text x={x0 + base + 12} y={y1 + 21} className="scheme-label">{a}</text>
-        <text x="0" y={y2 + 21} className="scheme-label scheme-name">{names[1]}</text>
-        <rect x={x0} y={y2} width={base} height={h} className="scheme-frame is-bar is-second" style={{ "--i": 1 }} />
-        <rect x={x0 + base} y={y2} width={added} height={h} className="scheme-frame is-bar is-dashed" style={{ "--i": 2 }} />
-        <text x={x0 + base + added + 12} y={y2 + 21} className={`scheme-label ${solved ? "is-solved" : ""}`}>{mark}</text>
-        <text x={x0 + base + added / 2} y={y2 + h + 28} textAnchor="middle" className="scheme-label scheme-note">{phrase}</text>
-      </>
+    const y1 = 46;
+    const y2 = 112;
+    const h = 26;
+    const dash = Math.max(36, longer - shorter);
+    const first = a >= extra ? longer : shorter;
+    const secondSolid = a >= extra ? shorter : longer - dash;
+    return (
+      <div className="scheme-sheet">
+        <svg className="scheme-draw" viewBox="0 0 520 210" role="img" aria-label={solved ? `Схема: разница ${solved}` : "Схема: разница неизвестна"}>
+          <text x="6" y={y1 + 18} className="scheme-label scheme-name">{names[0]}</text>
+          <rect x={x0} y={y1} width={first} height={h} rx="3" className="scheme-bar" />
+          <SchemePill x={x0 + first / 2} y={y1 - 22} text={a} />
+          <text x="6" y={y2 + 18} className="scheme-label scheme-name">{names[1]}</text>
+          <rect x={x0} y={y2} width={Math.max(secondSolid, 48)} height={h} rx="3" className="scheme-bar is-second" />
+          <rect x={x0 + Math.max(secondSolid, 48)} y={y2} width={dash} height={h} rx="3" className="scheme-bar is-dashed" />
+          <SchemePill x={x0 + Math.max(secondSolid, 48) + dash / 2} y={y2 + h + 28} text={phrase || "разница"} tone="is-note" />
+          <ResultMark x={x0 + Math.max(secondSolid, 48) + dash / 2} y={y2 - 22} text={mark} solved={Boolean(solved)} />
+        </svg>
+      </div>
     );
-  } else if (mode === "times") {
+  }
+  if (mode === "times") {
     const piece = width(less ? second : a);
     const copies = less ? times : times;
     rows = (
@@ -1148,6 +1238,93 @@ function StoryGlyph({ kind }) {
   return <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 16h16c2 8 2 20 0 30H14z" fill="#7eb6e0" stroke="#1c2b24" strokeWidth="3" /><path d="M30 16h20v30H30c-2-8-2-22 0-30z" fill="#f6d98a" stroke="#1c2b24" strokeWidth="3" /></svg>;
 }
 
+export function SceneArt({ kind }) {
+  const ink = { fill: "none", stroke: "#1c2b24", strokeWidth: 3, strokeLinejoin: "round", strokeLinecap: "round" };
+  const scenes = {
+    fish: (
+      <>
+        <ellipse cx="150" cy="118" rx="78" ry="18" fill="#e7d3b0" />
+        <path d="M78 108c0-48 32-78 72-78s72 30 72 78v8H78z" fill="#d7f3ff" stroke="#1c2b24" strokeWidth="4" />
+        <path d="M86 96c18 16 90 16 112 0" fill="#8fd4f2" opacity="0.85" />
+        <ellipse cx="132" cy="78" rx="22" ry="12" fill="#f0b14a" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M110 78l-14-10v20z" fill="#e07a1f" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="144" cy="74" r="2" fill="#1c2b24" />
+        <circle cx="168" cy="52" r="3" fill="#fff" stroke="#1b7c8c" />
+        <circle cx="184" cy="64" r="2" fill="#fff" stroke="#1b7c8c" />
+      </>
+    ),
+    berry: (
+      <>
+        <ellipse cx="92" cy="132" rx="58" ry="16" fill="#c4922e" />
+        <ellipse cx="210" cy="132" rx="58" ry="16" fill="#a87420" />
+        <path d="M70 118c10-28 28-36 36-18 8-20 30-16 28 10" fill="#3c9a48" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M188 116c12-30 32-34 38-14 10-18 28-12 24 12" fill="#2f8a40" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="86" cy="102" r="6" fill="#e23b32" stroke="#1c2b24" strokeWidth="2" />
+        <circle cx="108" cy="96" r="6" fill="#e23b32" stroke="#1c2b24" strokeWidth="2" />
+        <circle cx="98" cy="112" r="5" fill="#d23b32" stroke="#1c2b24" strokeWidth="2" />
+        <circle cx="206" cy="104" r="6" fill="#e23b32" stroke="#1c2b24" strokeWidth="2" />
+        <circle cx="226" cy="98" r="5" fill="#e23b32" stroke="#1c2b24" strokeWidth="2" />
+      </>
+    ),
+    book: (
+      <>
+        <path d="M40 150h220v12H40z" fill="#8a5a2b" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="58" y="78" width="22" height="72" fill="#e23b32" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="84" y="64" width="18" height="86" fill="#1b7c8c" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="106" y="86" width="26" height="64" fill="#f0b14a" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="136" y="70" width="20" height="80" fill="#3c9a48" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="160" y="90" width="24" height="60" fill="#7b4bb7" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="188" y="76" width="18" height="74" fill="#e07a1f" stroke="#1c2b24" strokeWidth="3" />
+      </>
+    ),
+    pear: (
+      <>
+        <path d="M70 150c10-28 140-28 156 0" fill="#c4922e" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M78 118h140c6 20 4 36-8 46H90c-12-8-16-24-12-46z" fill="#e7c36a" stroke="#1c2b24" strokeWidth="3" />
+        <ellipse cx="118" cy="78" rx="16" ry="20" fill="#c6e27a" stroke="#1c2b24" strokeWidth="3" />
+        <ellipse cx="150" cy="70" rx="16" ry="22" fill="#d4ee86" stroke="#1c2b24" strokeWidth="3" />
+        <ellipse cx="178" cy="82" rx="15" ry="18" fill="#b6d46a" stroke="#1c2b24" strokeWidth="3" />
+      </>
+    ),
+    flower: (
+      <>
+        <path d="M128 150h44l8-36h-60z" fill="#7eb6e0" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M118 114h64" {...ink} />
+        <circle cx="110" cy="78" r="16" fill="#f3a6c8" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="150" cy="62" r="18" fill="#e23b32" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="190" cy="80" r="16" fill="#f6c14b" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="150" cy="96" r="14" fill="#f28b82" stroke="#1c2b24" strokeWidth="3" />
+      </>
+    ),
+    bus: (
+      <>
+        <rect x="36" y="78" width="230" height="62" rx="12" fill="#f0b14a" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="52" y="90" width="36" height="24" fill="#d7f3ff" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="98" y="90" width="36" height="24" fill="#d7f3ff" stroke="#1c2b24" strokeWidth="3" />
+        <rect x="144" y="90" width="36" height="24" fill="#d7f3ff" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="84" cy="146" r="12" fill="#1c2b24" />
+        <circle cx="210" cy="146" r="12" fill="#1c2b24" />
+      </>
+    ),
+    apple: (
+      <>
+        <path d="M70 150c8-24 150-24 160 0" fill="#c4922e" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M86 120h128c8 18 4 36-10 44H98c-14-8-18-26-12-44z" fill="#e7c36a" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="124" cy="78" r="18" fill="#e23b32" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="160" cy="68" r="18" fill="#d23b32" stroke="#1c2b24" strokeWidth="3" />
+        <circle cx="188" cy="84" r="16" fill="#e15b49" stroke="#1c2b24" strokeWidth="3" />
+        <path d="M160 50c2-8 10-10 14-8" {...ink} />
+      </>
+    ),
+  };
+  return (
+    <svg className="scene-art" viewBox="0 0 300 180" role="img" aria-label="Рисунок к задаче">
+      <rect x="8" y="8" width="284" height="164" rx="24" fill="#f4fafc" stroke="#d5e3ea" />
+      {scenes[kind] || scenes.apple}
+    </svg>
+  );
+}
+
 export function StoryPicture({ kind, count = 4 }) {
   const total = Math.max(1, Math.min(Number(count) || 4, 6));
   return (
@@ -1184,24 +1361,27 @@ export function StoryTask({ question, shown, phase, showSolution, dispatch }) {
   }, [phase, showSolution, question.answer, question.prompt, question.scheme]);
   const pictureOn = !open && phase !== "reveal";
   return (
-    <div className="story-task">
-      {pictureOn ? <StoryPicture kind={scene.picture} count={Math.min(scene.a || 4, 6)} /> : null}
-      <p className="prompt">{question.prompt}</p>
-      <div className="story-tools">
-        <button type="button" className="btn secondary is-hidden" onClick={() => say(question.prompt)}>Прослушать задачу</button>
-        {question.scheme !== false ? <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Схема</button> : null}
-        <button type="button" className="btn secondary" onClick={() => dispatch?.({ type: "explain" })}>Показать решение</button>
-      </div>
-      {open ? (
-        <div className="story-scheme">
-          <StoryScheme scene={scene} solved={solved} />
+    <div className="story-task is-beside">
+      <div className="story-copy">
+        <p className="prompt">{question.prompt}</p>
+        <div className="story-tools">
+          <button type="button" className="btn secondary is-hidden" onClick={() => say(question.prompt)}>Прослушать задачу</button>
+          {question.scheme !== false ? <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Схема</button> : null}
+          <button type="button" className="btn secondary" onClick={() => dispatch?.({ type: "explain" })}>Показать решение</button>
         </div>
-      ) : null}
-      {steps ? <SolutionBlock solution={steps} onNext={dispatch ? () => dispatch({ type: "next" }) : null} /> : null}
-      <div className="eq">
-        <span className="lead">Ответ</span>
-        <span className={`blank ${phase === "flash" ? "is-bad" : ""} ${phase === "reveal" ? "is-show" : ""}`}>{shown || "\u00a0"}</span>
-        {question.unit && (shown || phase === "reveal") ? <span className="num">{question.unit}</span> : null}
+        <div className="eq">
+          <span className="lead">Ответ</span>
+          <span className={`blank ${phase === "flash" ? "is-bad" : ""} ${phase === "reveal" ? "is-show" : ""}`}>{shown || "\u00a0"}</span>
+          {question.unit && (shown || phase === "reveal") ? <span className="num">{question.unit}</span> : null}
+        </div>
+        {steps ? <SolutionBlock solution={steps} onNext={dispatch ? () => dispatch({ type: "next" }) : null} /> : null}
+      </div>
+      <div className="story-side">
+        {open ? (
+          <div className="story-scheme">
+            <StoryScheme scene={scene} solved={solved} />
+          </div>
+        ) : pictureOn ? <SceneArt kind={scene.picture} /> : null}
       </div>
     </div>
   );

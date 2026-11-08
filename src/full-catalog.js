@@ -447,7 +447,7 @@ function seenNumber(answer, scene) {
 function dots(max) {
   const n = ri(0, Math.min(max, 10));
   return {
-    ...counted(`Сколько здесь шляп?`, n, 10, { kind: "count", count: n, glyph: "hat" }),
+    ...counted(`Сколько предметов на экране?`, n, 10, { kind: "count", count: n, glyph: "hat" }),
     skipLabel: "Помощь",
     speak: true,
   };
@@ -755,7 +755,7 @@ function pairs(max) {
 
 function learnCount(max) {
   const n = ri(0, Math.min(max, 10));
-  return counted(`Сколько здесь лошадей?`, n, Math.min(max, 10), { kind: "count", count: n, glyph: "horse" });
+  return counted(`Сколько предметов на экране?`, n, Math.min(max, 10), { kind: "count", count: n, glyph: "horse" });
 }
 
 function moreLessTask(max) {
@@ -1312,15 +1312,12 @@ function shapeLike() {
 }
 
 function findShapes() {
-  const items = shuffle(["square", "circle", "triangle", "square", "circle", "triangle"]).slice(0, 5);
-  if (!items.includes("square")) items[0] = "square";
-  const ids = items.map((kind, index) => (kind === "square" ? String(index) : null)).filter(Boolean);
   return {
     type: "select",
-    prompt: "Найди все квадраты",
-    answer: ids.join("|"),
+    prompt: "Найди все квадраты.",
+    answer: "left|right",
     manualNext: true,
-    scene: { kind: "find", items, seed: ri(1, 99999) },
+    scene: { kind: "find", picture: "castle", squares: ["left", "right"], seed: ri(1, 999999) },
   };
 }
 
@@ -1393,36 +1390,49 @@ function segment() {
 function leftRight() {
   const items = shuffle(["машина", "барабан", "ракета", "лейка"]);
   const gen = { машина: "машины", барабан: "барабана", ракета: "ракеты", лейка: "лейки" };
-  const index = ri(0, items.length - 2);
+  const index = ri(0, items.length - 1);
+  const canLeft = index > 0;
+  const canRight = index < items.length - 1;
+  const left = canLeft && (!canRight || Math.random() < 0.5);
   return {
     type: "choice",
-    prompt: `Что справа от ${gen[items[index]]}?`,
-    answer: items[index + 1],
+    prompt: left ? `Что слева от ${gen[items[index]]}?` : `Что справа от ${gen[items[index]]}?`,
+    answer: items[left ? index - 1 : index + 1],
     choices: items,
     scene: { kind: "row-pick", items },
   };
 }
 
 function aboveBelow() {
-  const top = pick(["ваза", "мяч", "книга"]);
-  const bottom = pick(["машина", "кубик", "лейка"].filter((item) => item !== top));
+  const shelf = pick([
+    { top: "лампа", topCase: "лампой", bottom: "лейка", bottomCase: "лейкой" },
+    { top: "апельсин", topCase: "апельсином", bottom: "юла", bottomCase: "юлой" },
+    { top: "ваза", topCase: "вазой", bottom: "мяч", bottomCase: "мячом" },
+  ]);
+  const under = Math.random() < 0.5;
   return {
     type: "choice",
-    prompt: "Что стоит на верхней полке?",
-    answer: top,
-    choices: shuffle([top, bottom]),
-    scene: { kind: "stack", top, bottom },
+    prompt: under ? `Что стоит на полке под ${shelf.topCase}?` : `Что стоит на полке над ${shelf.bottomCase}?`,
+    answer: under ? shelf.bottom : shelf.top,
+    choices: shuffle([shelf.top, shelf.bottom]),
+    scene: { kind: "stack", top: shelf.top, bottom: shelf.bottom },
   };
 }
 
 function corners() {
-  const spot = pick(["Вверху", "Внизу", "В углу"]);
+  const places = [
+    { ask: "в левом нижнем углу", x: 48, y: 104 },
+    { ask: "справа посередине", x: 168, y: 70 },
+    { ask: "в правом верхнем углу", x: 168, y: 36 },
+  ];
+  const names = shuffle(["ёж", "кораблик", "слон", "барабан", "лягушка", "кубик", "яблоко", "колокольчик"]).slice(0, places.length);
+  const asked = ri(0, places.length - 1);
   return {
     type: "choice",
-    prompt: "Где стоит фигурка?",
-    answer: spot,
-    choices: ["Вверху", "Внизу", "В углу"],
-    scene: { kind: "spot", spot },
+    prompt: `Что нарисовано ${places[asked].ask}?`,
+    answer: names[asked],
+    choices: names,
+    scene: { kind: "spot", items: places.map((place, index) => ({ ...place, name: names[index] })) },
   };
 }
 
@@ -1670,20 +1680,42 @@ function hour24() {
   };
 }
 
+function clockHour(hour) {
+  return ((hour - 1) % 12) + 1;
+}
+
 function elapsed() {
-  const start = ri(1, 10);
-  const hours = ri(1, 4);
-  const end = start + hours;
-  const from = `${start}:00`;
-  const to = `${end}:00`;
+  if (Math.random() < 0.5) {
+    const start = ri(8, 16);
+    const hours = ri(1, 3);
+    const end = start + hours;
+    const from = `${start}:00`;
+    const to = `${end}:00`;
+    return {
+      ...ask(`Экскурсия началась в ${from} и закончилась в ${to}. Сколько времени длилась экскурсия?`, hours),
+      scene: { kind: "clocks", clocks: [{ hour: clockHour(start), minute: 0 }, { hour: clockHour(end), minute: 0 }] },
+      unit: "ч",
+      keypad: true,
+      solution: {
+        steps: [`От ${from} до ${to} — ${hours} ${plural(hours, "час", "часа", "часов")}.`],
+        answerLine: `Ответ: ${hours} ч.`,
+      },
+    };
+  }
+  const hour = ri(7, 20);
+  const startM = pick([0, 10, 15, 20, 30]);
+  const mins = pick([5, 10, 15, 20, 25, 30]);
+  const endM = startM + mins;
+  const from = `${hour}:${String(startM).padStart(2, "0")}`;
+  const to = `${hour}:${String(endM).padStart(2, "0")}`;
   return {
-    ...ask("Сколько времени прошло?", hours),
-    scene: { kind: "clocks", clocks: [{ hour: start, minute: 0 }, { hour: end, minute: 0 }] },
-    unit: "ч",
+    ...ask(`Ученик вышел из школы в ${from} и пришел домой в ${to}. Сколько времени занял путь домой?`, mins),
+    scene: { kind: "clocks", clocks: [{ hour: clockHour(hour), minute: startM }, { hour: clockHour(hour), minute: endM }] },
+    unit: "мин",
     keypad: true,
     solution: {
-      steps: [`От ${from} до ${to}. Вычитаем часы: ${end} − ${start} = ${hours}.`],
-      answerLine: `Ответ: ${hours} ч.`,
+      steps: [`От ${from} до ${to} — ${mins} минут.`],
+      answerLine: `Ответ: ${mins} мин.`,
     },
   };
 }
@@ -1719,42 +1751,54 @@ function placePhrase(hundreds, tens, ones) {
 
 function place1000() {
   const hundreds = ri(1, 9);
-  const tens = ri(0, 9);
+  const tens = Math.random() < 0.45 ? 0 : ri(1, 9);
   const ones = ri(0, 9);
   const value = hundreds * 100 + tens * 10 + ones;
+  const parts = [hundreds * 100, tens * 10, ones].filter((part) => part > 0);
+  const sum = parts.join(" + ");
+  const zero = tens === 0 ? 1 : ones === 0 ? 2 : null;
+  const steps = [
+    `Сумма показывает, сколько в числе сотен, десятков и единиц: ${hundreds} сот${tens ? `, ${tens} дес.` : ""} и ${ones} ед.`,
+  ];
+  if (tens === 0) steps.push("Десятков нет, поэтому в разряде десятков пишем 0.");
+  else if (ones === 0) steps.push("Единиц нет, поэтому в разряде единиц пишем 0.");
+  else steps.push(`${sum} = ${value}.`);
   return {
     type: "commit",
-    prompt: `Запиши число, в котором ${placePhrase(hundreds, tens, ones)}`,
+    prompt: "Какое число равно сумме разрядных слагаемых?",
+    formula: `${sum} = ?`,
     answer: String(value),
     expect: value,
     keypad: true,
-    solution: {
-      steps: [`${hundreds} сот., ${tens} дес. и ${ones} ед. Пустой разряд пишем нулём.`, `${hundreds} × 100 + ${tens} × 10 + ${ones} = ${value}.`],
-      answerLine: `Ответ: ${value}.`,
-    },
+    check: true,
+    checkLabel: "ПРОВЕРИТЬ",
+    scene: { kind: "places-sum", hundreds, tens, ones, zero },
+    solution: { steps, answerLine: `Ответ: ${value}.` },
   };
 }
 
 function classes() {
   const places = ["единицы", "десятки", "сотни", "единицы тысяч", "десятки тысяч"];
-  const number = ri(10000, 99999);
-  const text = String(number);
-  const index = ri(0, places.length - 1);
-  const digit = text[text.length - 1 - index];
-  const options = [digit];
-  for (const extra of ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]) {
-    if (!options.includes(extra)) options.push(extra);
-    if (options.length === 4) break;
+  let number = 0;
+  let text = "";
+  let index = 0;
+  let digit = "";
+  for (let guard = 0; guard < 30; guard += 1) {
+    number = ri(10000, 99999);
+    text = String(number);
+    index = ri(0, places.length - 1);
+    digit = text[text.length - 1 - index];
+    if (text.split(digit).length === 2) break;
   }
   return {
     type: "choice",
-    prompt: `Какая цифра стоит в разряде ${places[index]} в числе ${number}?`,
-    answer: digit,
-    choices: shuffle(options),
+    prompt: `В каком разряде стоит цифра ${digit} в числе ${number}?`,
+    answer: places[index],
+    choices: shuffle(places),
     scene: { kind: "places", number: text, index },
     solution: {
-      steps: [`В числе ${number} разряд «${places[index]}» стоит на месте ${index + 1} справа.`, `Цифра ${digit} × ${10 ** index} = ${Number(digit) * 10 ** index}.`],
-      answerLine: `Ответ: ${digit}.`,
+      steps: [`В числе ${number} цифра ${digit} стоит в разряде «${places[index]}».`],
+      answerLine: `Ответ: ${places[index]}.`,
     },
   };
 }
@@ -1809,17 +1853,29 @@ function factorOf(title) {
 
 function tableMul(title) {
   const factor = factorOf(title);
-  if (factor && factor > 10) return binary(factor, "×", ri(2, 9));
-  const row = factor || ri(2, 10);
-  const col = ri(1, 10);
-  return {
-    type: "number",
-    prompt: "Заполните пропуски в таблице умножения",
-    tokens: [],
-    answer: String(row * col),
-    expect: row * col,
-    scene: { kind: "pythagoras", row, col },
-  };
+  if (factor && factor > 10) return binary(factor, "×", ri(1, 10));
+  return binary(factor || ri(1, 10), "×", ri(1, 10));
+}
+
+function oneAndZero() {
+  const n = ri(2, 99);
+  const roll = ri(0, 5);
+  const made = roll === 0 ? binary(1, "×", n)
+    : roll === 1 ? binary(n, "×", 1)
+    : roll === 2 ? binary(0, "×", n)
+    : roll === 3 ? binary(n, "×", 0)
+    : roll === 4 ? binary(0, "÷", n)
+    : binary(n, "÷", 1);
+  const rule = roll <= 1
+    ? "Если один из множителей равен 1, произведение равно другому множителю."
+    : roll <= 3
+      ? "Если один из множителей равен 0, произведение равно нулю."
+      : roll === 4
+        ? "При делении нуля на число получается нуль."
+        : "При делении на 1 частное равно делимому.";
+  made.revealExplains = true;
+  made.solution = { steps: [rule], answerLine: `Ответ: ${made.answer}.` };
+  return made;
 }
 
 function tableDiv(title) {
@@ -1856,7 +1912,7 @@ function pictureMul() {
   return {
     type: "number",
     tokens: [],
-    prompt: `Сколько всего ${thing.many}?`,
+    prompt: `Сколько всего ${thing.many}? Запишите умножением`,
     answer: String(total),
     expect: total,
     picture: {
@@ -2259,7 +2315,7 @@ function mass() {
     return unitTask(`Переведите в ${names[big]}.`, `${amount * factor} ${small} = ? ${big}`, amount, big, units, factors, [small], [big]);
   }
   const rest = ri(1, Math.min(9, factor - 1));
-  return unitTask(`Выразите массу в ${names[small]}.`, `${amount} ${big} ${rest} ${small} = ? ${small}`, amount * factor + rest, small, units, factors, [big, small], [small]);
+  return unitTask(`Переведите в ${names[small]}.`, `${amount} ${big} ${rest} ${small} = ? ${small}`, amount * factor + rest, small, units, factors, [big, small], [small]);
 }
 
 function timeUnits() {
@@ -2294,6 +2350,42 @@ function moneyUnits() {
 }
 
 function addMeasures() {
+  if (Math.random() < 0.5) {
+    let aM = 0;
+    let aC = 0;
+    let bM = 0;
+    let bC = 0;
+    let left = 0;
+    let right = 0;
+    do {
+      aM = ri(2, 8);
+      aC = ri(0, 90);
+      bM = ri(1, aM);
+      bC = ri(0, 90);
+      left = aM * 100 + aC;
+      right = bM * 100 + bC;
+    } while (left - right < 100);
+    const diff = left - right;
+    const meters = Math.floor(diff / 100);
+    const cm = diff % 100;
+    return {
+      type: "number",
+      prompt: `Найдите разность ${aM} м ${aC} см − ${bM} м ${bC} см`,
+      tokens: [],
+      answer: String(diff),
+      expect: diff,
+      entry: [String(meters), String(cm).padStart(2, "0")],
+      scene: { kind: "measures", left: `${aM} м ${aC} см − ${bM} м ${bC} см` },
+      solution: {
+        steps: [
+          `${aM} м ${aC} см = ${left} см.`,
+          `${bM} м ${bC} см = ${right} см.`,
+          `Вычитаем: ${left} − ${right} = ${diff} см = ${meters} м ${String(cm).padStart(2, "0")} см.`,
+        ],
+        answerLine: `Ответ: ${meters} м ${String(cm).padStart(2, "0")} см.`,
+      },
+    };
+  }
   const aM = ri(1, 4);
   const aC = ri(10, 80);
   const bM = ri(1, 3);
@@ -2303,7 +2395,7 @@ function addMeasures() {
   const cm = total % 100;
   return {
     type: "number",
-    prompt: `${aM} м ${aC} см + ${bM} м ${bC} см`,
+    prompt: `Найдите сумму ${aM} м ${aC} см + ${bM} м ${bC} см`,
     tokens: [],
     answer: String(total),
     expect: total,
@@ -2330,7 +2422,7 @@ function mulMeasures() {
   const totalC = total % 100;
   return {
     type: "number",
-    prompt: `${totalM} м ${totalC} см : ${times}`,
+    prompt: `Найдите частное ${totalM} м ${String(totalC).padStart(2, "0")} см : ${times}`,
     tokens: [],
     answer: String(part),
     expect: part,
@@ -2418,13 +2510,16 @@ function areaRect() {
 }
 
 function polyPerimeter() {
-  const sides = [ri(2, 10), ri(2, 10), ri(2, 10), ri(2, 10), ri(2, 10)];
+  const equal = ri(3, 12);
+  const base = ri(3, 12);
+  const sides = [equal, equal, base];
   const sum = sides.reduce((total, side) => total + side, 0);
   return {
-    ...ask("Найди периметр многоугольника", sum),
+    ...ask("Стороны, отмеченные черточками, равны. Найдите периметр треугольника.", sum),
     scene: { kind: "poly-sides", sides },
     unit: "см",
-    solution: { steps: ["Периметр — сумма всех сторон.", `${sides.join(" + ")} = ${sum}.`], answerLine: `Ответ: ${sum} см.` },
+    check: true,
+    solution: { steps: ["Отмеченные стороны равны.", `${sides.join(" + ")} = ${sum}.`], answerLine: `Ответ: ${sum} см.` },
   };
 }
 
@@ -2836,12 +2931,38 @@ function brackets() {
   return tokens([String(a), "+", "(", String(b), "−", String(c), ")"], a + b - c);
 }
 
+function explainOps(tokens, order) {
+  const names = { "+": "сложение", "−": "вычитание", "×": "умножение", "·": "умножение", ":": "деление", "÷": "деление" };
+  const verbs = { "+": "Складываем", "−": "Вычитаем", "×": "Умножаем", "·": "Умножаем", ":": "Делим", "÷": "Делим" };
+  let items = tokens.map((token, index) => ({ token, index, value: /^\d+$/.test(token) ? Number(token) : null }));
+  const steps = [];
+  const ranks = [];
+  order.forEach((opIndex, step) => {
+    const at = items.findIndex((item) => item.index === opIndex);
+    let left = at - 1;
+    while (left >= 0 && items[left].value == null) left -= 1;
+    let right = at + 1;
+    while (right < items.length && items[right].value == null) right += 1;
+    const op = items[at].token;
+    const leftValue = items[left].value;
+    const rightValue = items[right].value;
+    const value = op === "+" ? leftValue + rightValue : op === "−" ? leftValue - rightValue : op === "×" || op === "·" ? leftValue * rightValue : leftValue / rightValue;
+    steps.push(`${verbs[op]}: ${leftValue} ${op} ${rightValue} = ${value}.`);
+    ranks.push(`${step + 1} — ${names[op]}`);
+    items.splice(left, right - left + 1, { token: String(value), index: -1, value });
+  });
+  steps.push(`Ответ: ${ranks.join(", ")}.`);
+  const last = items.find((item) => item.value != null);
+  return { steps, answerLine: `Ответ: ${last ? last.value : ""}.` };
+}
+
 function opsOrder(tokens, order) {
   return {
     type: "select",
-    prompt: "Нажмите на знаки в том порядке, в котором выполняются действия",
+    prompt: "Нажмите на знаки действий в порядке их выполнения",
     answer: order.join("|"),
     scene: { kind: "ops", tokens },
+    solution: explainOps(tokens, order),
   };
 }
 
@@ -2878,6 +2999,14 @@ function threeActionsAdd() {
 }
 
 function orderNoParen() {
+  if (Math.random() < 0.5) {
+    const d = ri(2, 9);
+    const q = ri(2, 9);
+    const c = d * q;
+    const b = ri(1, 9);
+    const a = ri(b + 1, 40);
+    return opsOrder([String(a), "−", String(b), "+", String(c), ":", String(d)], [5, 1, 3]);
+  }
   const a = ri(2, 30);
   const b = ri(2, 9);
   const c = ri(2, 9);
@@ -2885,13 +3014,35 @@ function orderNoParen() {
 }
 
 function orderParen() {
-  const a = ri(2, 9);
-  const b = ri(1, 8);
   const c = ri(2, 9);
-  return opsOrder(["(", String(a), "+", String(b), ")", "×", String(c)], [2, 5]);
+  const d = ri(2, 9);
+  const quot = ri(3, 12);
+  const left = quot * c * d;
+  const a = ri(Math.max(2, Math.floor(left * 0.3)), Math.max(3, Math.floor(left * 0.7)));
+  const b = left - a;
+  return opsOrder(["(", String(a), "+", String(b), ")", ":", "(", String(c), "·", String(d), ")"], [2, 8, 5]);
 }
 
 function threeActions() {
+  if (Math.random() < 0.5) {
+    const d = ri(2, 9);
+    const q = ri(2, 9);
+    const c = d * q;
+    const b = ri(1, 9);
+    const a = ri(b + 10, 90);
+    const value = a - b + q;
+    return {
+      type: "commit",
+      prompt: `Найдите значение выражения ${a} − ${b} + ${c} : ${d}`,
+      answer: String(value),
+      expect: value,
+      keypad: true,
+      solution: {
+        steps: [`Делим: ${c} : ${d} = ${q}.`, `Вычитаем: ${a} − ${b} = ${a - b}.`, `Складываем: ${a - b} + ${q} = ${value}.`],
+        answerLine: `Ответ: ${value}.`,
+      },
+    };
+  }
   const a = ri(2, 20);
   const b = ri(1, 9);
   const c = ri(2, 9);
@@ -2919,19 +3070,64 @@ function fourActions() {
 
 function equation(hard) {
   if (hard) {
-    const x = ri(2, 40);
-    const a = ri(20, 80);
-    const b = ri(2, 9);
+    const kind = ri(1, 3);
+    if (kind === 1) {
+      const factor = ri(2, 9);
+      const x = ri(100, 900);
+      const inside = ri(100, 2000);
+      const big = inside + x;
+      return {
+        type: "number",
+        prompt: `Решите уравнение ${factor} · (${big} − x) = ${factor * inside}`,
+        tokens: [],
+        answer: String(x),
+        expect: x,
+        entry: [String(inside), String(x)],
+        scene: { kind: "equation", line: `${big} − x =` },
+        check: true,
+        solution: {
+          steps: [`${big} − x = ${factor * inside} : ${factor} = ${inside}.`, `x = ${big} − ${inside} = ${x}.`],
+          answerLine: `Ответ: x = ${x}.`,
+        },
+      };
+    }
+    if (kind === 2) {
+      const quotient = ri(2, 9);
+      const x = ri(20, 400);
+      const add = ri(20, 400);
+      const inside = x + add;
+      return {
+        type: "number",
+        prompt: `Решите уравнение ${inside * quotient} : (x + ${add}) = ${quotient}`,
+        tokens: [],
+        answer: String(x),
+        expect: x,
+        entry: [String(inside), String(x)],
+        scene: { kind: "equation", line: `x + ${add} =` },
+        check: true,
+        solution: {
+          steps: [`x + ${add} = ${inside * quotient} : ${quotient} = ${inside}.`, `x = ${inside} − ${add} = ${x}.`],
+          answerLine: `Ответ: x = ${x}.`,
+        },
+      };
+    }
+    const x = ri(20, 800);
+    const a = ri(10, 200);
+    const b = ri(100, 2000);
     const mid = x + a;
     return {
       type: "number",
-      prompt: `(x + ${a}) × ${b} = ${mid * b}`,
+      prompt: `Решите уравнение (x + ${a}) + ${b} = ${mid + b}`,
       tokens: [],
       answer: String(x),
       expect: x,
       entry: [String(mid), String(x)],
       scene: { kind: "equation", line: `x + ${a} =` },
       check: true,
+      solution: {
+        steps: [`x + ${a} = ${mid + b} − ${b} = ${mid}.`, `x = ${mid} − ${a} = ${x}.`],
+        answerLine: `Ответ: x = ${x}.`,
+      },
     };
   }
   const kind = ri(1, 3);
@@ -2950,20 +3146,45 @@ function equation(hard) {
   return seenNumber(x, { kind: "equation", line: `x × ${a} = ${x * a}` });
 }
 
-function compareMax(max) {
-  if (max >= 100) {
-    const nums = [];
-    while (nums.length < 4) {
-      const next = ri(1, Math.min(max, 99999));
-      if (!nums.includes(next)) nums.push(next);
-    }
-    return {
-      type: "choice",
-      prompt: "Выберите наибольшее число",
-      answer: String(Math.max(...nums)),
-      choices: nums.map(String),
-    };
+function greatest(cap) {
+  const low = cap > 1000 ? 1000 : 100;
+  const high = cap > 1000 ? Math.min(cap, 99999) : 999;
+  const nums = [];
+  while (nums.length < 4) {
+    const next = ri(low, high);
+    if (!nums.includes(next)) nums.push(next);
   }
+  const winner = Math.max(...nums);
+  const width = String(Math.max(...nums)).length;
+  const rows = nums.map((value) => String(value).padStart(width, "0"));
+  const names = ["десятки тысяч", "тысячи", "сотни", "десятки", "единицы"].slice(-width);
+  let place = 0;
+  const winRow = rows[nums.indexOf(winner)];
+  for (let index = 0; index < width; index += 1) {
+    const best = Math.max(...rows.map((row) => Number(row[index])));
+    if (Number(winRow[index]) === best && rows.filter((row) => Number(row[index]) === best).length === 1) {
+      place = index;
+      break;
+    }
+  }
+  return {
+    type: "choice",
+    prompt: "Выберите наибольшее число",
+    answer: String(winner),
+    choices: nums.map(String),
+    scene: { kind: "max", numbers: nums, place, placeNames: names },
+    solution: {
+      steps: [
+        `Сравниваем по разрядам, начиная с «${names[0]}».`,
+        `В разряде «${names[place]}» у числа ${winner} цифра ${winRow[place]} — она больше, чем у остальных.`,
+      ],
+      answerLine: `Ответ: ${winner}.`,
+    },
+  };
+}
+
+function compareMax(max) {
+  if (max >= 100) return greatest(max);
   const left = ri(0, max);
   const right = Math.random() < 0.22 ? left : ri(0, max);
   return compare(left, right);
@@ -3074,7 +3295,11 @@ export function makeMixed(level, ops) {
   if (op === "+") return addWithin(5000, 20);
   if (op === "−") return subWithin(5000);
   if (op === "×") return Math.random() < 0.5 ? times21(2000) : timesRound();
-  return Math.random() < 0.5 ? exactDiv(1000) : divRound();
+  if (Math.random() < 0.5) return exactDiv(1000);
+  const zeros = ri(1, 2);
+  const divisor = ri(1, 9) * 10 ** zeros;
+  const quotient = ri(2, 9);
+  return binary(divisor * quotient, "÷", divisor);
 }
 
 function columnNote() {
@@ -3100,11 +3325,13 @@ export function makeQuestion(title, grade, ops) {
   if (t.startsWith("хватит ли")) return enough(lim);
   if (t.startsWith("больше или меньше")) return whichCount(lim, Math.random() < 0.5);
   if (t.startsWith("больше, меньше, равно")) return sameCount();
-  if (t.startsWith("сравнение целых") || t.startsWith("сравнение чисел") || t.startsWith("сравнение многозначных")) {
-    const cap = t.includes("1000") ? 1000 : t.includes("многознач") ? 99999 : lim;
-    const left = ri(0, cap);
-    const right = Math.random() < 0.22 ? left : ri(0, cap);
+  if (t.startsWith("сравнение целых")) {
+    const left = ri(0, lim);
+    const right = Math.random() < 0.22 ? left : ri(0, lim);
     return compare(left, right);
+  }
+  if (t.startsWith("сравнение чисел") || t.startsWith("сравнение многозначных")) {
+    return greatest(t.includes("многознач") ? 99999 : 1000);
   }
   if (t.startsWith("сравнение длины")) return lengthCompare();
   if (t.startsWith("составь число из кубиков")) return cubeWays(lim);
@@ -3203,6 +3430,7 @@ export function makeQuestion(title, grade, ops) {
   if (t.startsWith("удобное сложение")) return convenientAdd();
   if (t.startsWith("удобное умножение")) return convenientMul();
   if (t.startsWith("таблица пифагора")) return pythagoras();
+  if (t.startsWith("умножение и деление на 1")) return oneAndZero();
   if (t.startsWith("таблица умножения")) return tableMul(t);
   if (t.startsWith("таблица деления")) return tableDiv(t);
   if (t.startsWith("умножение по рисунку")) return pictureMul();
@@ -3446,7 +3674,7 @@ function dress(question, title, grade) {
   if (rule) question.rule = rule;
   if (question.help || question.rule) question.hideSkip = true;
   if (t.startsWith("таблица пифагора") || t.startsWith("доля фигуры") || t.startsWith("целое по одной")) question.hideSkip = true;
-  if (["домино", "найди фигуры", "замкнутые", "куда придет", "где стоит", "графический диктант", "внутри и снаружи", "длиннее и короче", "измерь мерками", "найди лишнюю", "заполни таблицу", "ряд фигур", "сколько точек", "дорисуй", "умножение по рисунку", "в строчку", "первое неполное", "оканчивающиеся нулями", "уравнения со скобками", "задачи с натуральными", "столбец между", "задачи со столбчатыми", "на какую фигуру", "обратные задачи"].some((name) => t.startsWith(name) || t.includes(name))) {
+  if (["домино", "найди фигуры", "замкнутые", "куда придет", "где стоит", "графический диктант", "внутри и снаружи", "длиннее и короче", "измерь мерками", "найди лишнюю", "заполни таблицу", "ряд фигур", "сколько точек", "дорисуй", "умножение по рисунку", "в строчку", "первое неполное", "оканчивающиеся нулями", "уравнения со скобками", "задачи с натуральными", "столбец между", "задачи со столбчатыми", "на какую фигуру", "обратные задачи", "умножение и деление на 1"].some((name) => t.startsWith(name) || t.includes(name))) {
     question.revealLabel = question.revealLabel || "Показать ответ";
   }
   if (["десятки и единицы", "сложение и вычитание величин", "периметр многоугольника", "радиус и диаметр", "умножение и деление величин", "доля числа"].some((name) => t.startsWith(name))) question.check = true;
@@ -3454,8 +3682,11 @@ function dress(question, title, grade) {
     question.solution = { steps: [`${question.scene.a} + ${question.scene.b} = ${question.answer}`], answerLine: `Ответ: ${question.answer}.` };
   }
   if (t.startsWith("умножение по рисунку") && question.picture) {
-    question.pictureRevealSum = true;
-    question.solution = { steps: [question.picture.sum], answerLine: "Знак умножения пока не записываем." };
+    const { groups, each } = question.picture;
+    question.solution = {
+      steps: [`${groups} ${plural(groups, "группа", "группы", "групп")} по ${each}: ${each} · ${groups} = ${question.answer}.`, question.picture.sum],
+      answerLine: `Ответ: ${question.answer}.`,
+    };
   }
   if (!question.solution) {
     const built = buildSolution(title, question);

@@ -7,7 +7,7 @@ import * as esbuild from "esbuild";
 import { pathToFileURL } from "node:url";
 import { everyTopic, GRADES } from "../src/curriculum.js";
 import { LIVE_CARDS } from "./live-cards.js";
-import { assertQuestion, evalTokens, questionKey } from "../src/question.js";
+import { assertQuestion, evalTokens, exampleKey, questionKey } from "../src/question.js";
 import { initSession, reduceSession, RUN_LENGTH } from "../src/session.js";
 
 const SAMPLES = 8;
@@ -505,3 +505,72 @@ for (const card of LIVE_CARDS) {
     assert.deepEqual(problems, []);
   });
 }
+
+function samplePool(topic, ops) {
+  const keys = new Set();
+  let stagnant = 0;
+  for (let i = 0; i < 900 && stagnant < 180; i += 1) {
+    let question;
+    try {
+      question = topic.make(ops);
+      assertQuestion(question);
+    } catch {
+      continue;
+    }
+    const key = exampleKey(question);
+    if (keys.has(key)) stagnant += 1;
+    else {
+      keys.add(key);
+      stagnant = 0;
+    }
+    if (keys.size > RUN_LENGTH) return keys;
+  }
+  return keys;
+}
+
+function answerOne(state, topic, ops) {
+  let next = submit(state, topic, ops, digitsToType(state));
+  if (next.phase === "flash") next = reduceSession(next, { type: "tick-flash" }, topic, ops);
+  if (next.phase === "reveal") next = reduceSession(next, { type: "tick-reveal" }, topic, ops);
+  return next;
+}
+
+test("за один заход пример не повторяется, пока не кончился набор", () => {
+  const small = [];
+  for (const item of everyTopic()) {
+    const { topic } = item;
+    const ops = topic.setup?.ops;
+    const pool = samplePool(topic, ops);
+    let state = initSession(topic, ops);
+    const keys = [];
+    for (let step = 0; step < RUN_LENGTH; step += 1) {
+      assert.equal(state.phase, "answer", `${item.grade} ${topic.title}`);
+      keys.push(exampleKey(state.question));
+      const doneBefore = state.primaryDone;
+      state = answerOne(state, topic, ops);
+      assert.equal(state.primaryDone, doneBefore + 1, `${item.grade} ${topic.title} не перешёл к следующему примеру`);
+      if (step < RUN_LENGTH - 1) assert.equal(state.phase, "answer", topic.title);
+    }
+    assert.equal(state.phase, "done", topic.title);
+    if (pool.size > RUN_LENGTH) {
+      assert.equal(new Set(keys).size, RUN_LENGTH, `${item.grade} ${topic.title}: повтор при наборе больше захода`);
+      continue;
+    }
+    small.push({ grade: item.grade, title: topic.title, size: pool.size });
+    const seen = new Set();
+    for (const key of keys) {
+      if (seen.has(key)) {
+        for (const itemKey of pool) {
+          assert.ok(seen.has(itemKey), `${item.grade} ${topic.title}: повтор до того, как кончился набор из ${pool.size}`);
+        }
+        seen.clear();
+      }
+      seen.add(key);
+    }
+    assert.equal(new Set(keys.slice(0, pool.size)).size, pool.size, `${item.grade} ${topic.title}`);
+  }
+  const shapes = small.find((item) => item.grade === 1 && item.title === "Основные фигуры");
+  const found = small.find((item) => item.title === "Найди фигуры на картинке");
+  assert.equal(shapes?.size, 5);
+  assert.equal(found?.size, 1);
+});

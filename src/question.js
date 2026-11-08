@@ -197,3 +197,36 @@ export function questionKey(q) {
     q.answer,
   ].join("~");
 }
+
+function exampleScene(scene) {
+  if (Array.isArray(scene)) return scene.map(exampleScene);
+  if (!scene || typeof scene !== "object") return scene;
+  const copy = {};
+  for (const key of Object.keys(scene)) {
+    if (key === "seed") continue;
+    copy[key] = exampleScene(scene[key]);
+  }
+  return copy;
+}
+
+// The example a child sees. Layout noise (seed) and the order of choice
+// buttons do not make a second example.
+export function exampleKey(q) {
+  const choices = q.choices ? [...q.choices].map(String).sort() : [];
+  return [
+    q.type,
+    (q.prompt || "").trim(),
+    q.lead || "",
+    q.tokens?.join(" ") || "",
+    q.column ? `${q.column.a}${q.column.op}${q.column.b}` : "",
+    q.work ? [q.work.a, q.work.op, q.work.b, q.work.c ?? "", (q.work.terms || []).join(",")].join(" ") : "",
+    q.left ?? "",
+    q.right ?? "",
+    choices.join("|"),
+    q.picture ? `${q.picture.kind}:${q.picture.groups}x${q.picture.each}:${q.picture.container || ""}` : "",
+    q.scene ? JSON.stringify(exampleScene(q.scene)) : "",
+    q.entry?.join(",") || "",
+    q.given ? JSON.stringify(q.given) : "",
+    q.answer,
+  ].join("~");
+}

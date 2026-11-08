@@ -1,23 +1,51 @@
-import { assertQuestion, pastPrompt, questionKey } from "./question.js";
+import { assertQuestion, exampleKey, pastPrompt, questionKey } from "./question.js";
 
 export const RUN_LENGTH = 10;
-const REPLAY_WAIT = 4;
 
-function freshQuestion(topic, ops, prevKey) {
-  let last = null;
-  for (let i = 0; i < 15; i += 1) {
-    try {
-      const made = topic.make(ops);
-      assertQuestion(made);
-      if (topic.check) topic.check(made);
-      if (questionKey(made) !== prevKey) return { ...made, isReplay: false };
-      last = made;
-    } catch {
-      last = null;
-    }
+function tryMake(topic, ops) {
+  try {
+    const made = topic.make(ops);
+    assertQuestion(made);
+    if (topic.check) topic.check(made);
+    return made;
+  } catch {
+    return null;
   }
-  if (last) return { ...last, isReplay: false };
-  return { type: "number", tokens: ["2", "+", "2"], answer: "4", isReplay: false };
+}
+
+// Draw the next new card without putting one back. `used` is the current
+// cycle. When every example the trainer can produce has already appeared,
+// start a new cycle. A pool of one example starts that next cycle immediately.
+function startCycle(topic, ops, avoid, prevKey) {
+  let sameExample = null;
+  let fallback = null;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const made = tryMake(topic, ops);
+    if (!made) continue;
+    const key = exampleKey(made);
+    fallback = { made, key };
+    if (key !== avoid) return { question: { ...made, isReplay: false }, used: [key] };
+    if (questionKey(made) !== prevKey) sameExample = { made, key };
+  }
+  const picked = sameExample || fallback;
+  if (!picked) {
+    const made = { type: "number", tokens: ["2", "+", "2"], answer: "4" };
+    return { question: { ...made, isReplay: false }, used: [exampleKey(made)] };
+  }
+  return { question: { ...picked.made, isReplay: false }, used: [picked.key] };
+}
+
+function drawQuestion(topic, ops, used, avoid, prevKey) {
+  const seen = new Set(used);
+  let duplicates = 0;
+  for (let attempt = 0; attempt < 1500 && duplicates < 120; attempt += 1) {
+    const made = tryMake(topic, ops);
+    if (!made) continue;
+    const key = exampleKey(made);
+    if (!seen.has(key)) return { question: { ...made, isReplay: false }, used: [...used, key] };
+    duplicates += 1;
+  }
+  return startCycle(topic, ops, avoid, prevKey);
 }
 
 function pushPast(state, kind, user = "") {
@@ -33,23 +61,18 @@ function pushPast(state, kind, user = "") {
   return [item, ...state.past].slice(0, 4);
 }
 
-function replayOf(question) {
-  return { ...question, isReplay: true };
-}
-
 function queueReplay(state) {
-  if (state.question.isReplay || state.attempted) return state.queue;
-  const replay = replayOf(state.question);
-  const key = questionKey(replay);
-  if (state.queue.some((item) => questionKey(item.question) === key)) return state.queue;
-  return [...state.queue, { question: replay, wait: REPLAY_WAIT }];
+  // A missed card stays on screen until it is resolved. It is not dealt again
+  // later in the run: the draw already consumed that example.
+  return state.queue;
 }
 
-function serve(state, question, primaryDone, queue) {
+function serve(state, question, primaryDone, queue, used = state.used) {
   return {
     ...state,
     question,
     queue,
+    used,
     input: "",
     flashValue: "",
     phase: "answer",
@@ -89,8 +112,8 @@ function advance(state, topic, ops) {
       tried: [],
     };
   }
-  const next = freshQuestion(topic, ops, state.prevKey);
-  return serve(state, next, primaryDone, queue);
+  const drawn = drawQuestion(topic, ops, state.used || [], exampleKey(state.question), state.prevKey);
+  return serve(state, drawn.question, primaryDone, queue, drawn.used);
 }
 
 function applyCorrect(state) {
@@ -212,7 +235,8 @@ function choose(state, value) {
 }
 
 export function initSession(topic, ops) {
-  const question = freshQuestion(topic, ops, "");
+  const drawn = drawQuestion(topic, ops, [], "", "");
+  const question = drawn.question;
   return {
     question,
     input: "",
@@ -222,6 +246,7 @@ export function initSession(topic, ops) {
     past: [],
     primaryDone: 0,
     queue: [],
+    used: drawn.used,
     requeued: false,
     attempted: false,
     step: 0,

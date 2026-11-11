@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { beep } from "../beep";
 import { findTopic, neighborTopics } from "../curriculum";
 import { childFacingText } from "../question";
-import { initSession, reduceSession, RUN_LENGTH } from "../session";
+import { initSession, reduceSession, RUN_LENGTH, timedReport } from "../session";
 import {
   keypadPreferred,
   readRecords,
@@ -487,13 +487,28 @@ export function NumericQuestion({ state, dispatch }) {
   );
 }
 
-function Run({ located, gradeId, ops, onAgain, onRetune }) {
+function formatLeft(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes > 0) return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return `${seconds} с`;
+}
+
+function formatAnswerTime(ms) {
+  if (!ms) return "0 с";
+  const text = (Math.round((ms / 1000) * 10) / 10).toString().replace(".", ",");
+  return `${text} с`;
+}
+
+function Run({ located, gradeId, ops, clock, onAgain, onRetune }) {
   const { topic } = located;
-  const [state, dispatch] = useReducer(
+  const [state, rawDispatch] = useReducer(
     (current, action) => reduceSession(current, action, topic, ops),
     undefined,
-    () => initSession(topic, ops),
+    () => initSession(topic, ops, clock ? { ...clock, now: Date.now() } : null),
   );
+  const dispatch = (action) => rawDispatch({ ...action, now: action.now ?? Date.now() });
   const [sound, setSound] = useState(soundEnabled);
   const [seconds, setSeconds] = useState(0);
   const [keypadOn, setKeypadOn] = useState(keypadPreferred);
@@ -523,7 +538,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
       return () => window.clearTimeout(id);
     }
     if (state.phase === "reveal" && !state.question.manualNext) {
-      const id = window.setTimeout(() => dispatch({ type: "tick-reveal" }), 2500);
+      const id = window.setTimeout(() => dispatch({ type: "tick-reveal", now: Date.now() }), 2500);
       return () => window.clearTimeout(id);
     }
     return undefined;
@@ -536,12 +551,22 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
   }, [sound, state.status]);
 
   useEffect(() => {
+    if (!state.clock || state.phase === "done") return undefined;
+    const id = window.setInterval(() => dispatch({ type: "tick-clock", now: Date.now() }), 200);
+    return () => window.clearInterval(id);
+  }, [state.clock, state.phase]);
+
+  useEffect(() => {
     if (state.phase !== "done" || record) return;
-    const earned = starsFor(state.stats.firstCorrect, RUN_LENGTH);
+    const report = state.clock ? timedReport(state) : null;
+    const earned = starsFor(
+      report ? report.correct : state.stats.firstCorrect,
+      report ? Math.max(report.given, 1) : RUN_LENGTH,
+    );
     rememberScore(gradeId, topic.id, state.stats.firstCorrect);
-    rememberRecord(gradeId, topic.id, state.stats.xp);
-    setRecord(rememberStars(gradeId, topic.id, earned));
-  }, [state.phase, state.stats.firstCorrect, gradeId, topic.id, record]);
+    const points = rememberRecord(gradeId, topic.id, state.stats.xp);
+    setRecord({ ...rememberStars(gradeId, topic.id, earned), pointsPrev: points.prev, pointsNext: points.next });
+  }, [state.phase, state.stats.firstCorrect, state.stats.xp, gradeId, topic.id, record, state.clock, state.answers]);
 
   useEffect(() => {
     function onKey(event) {
@@ -577,10 +602,13 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [story, state.phase]);
-  const clock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const storyClock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const keypadNeeded = !dropGame && (numeric || state.question.keypad || state.question.entry || state.question.scene?.kind === "poly" || Boolean(state.question.picture) || state.question.scene?.kind === "pythagoras" || (state.question.scene?.kind === "grid" && state.question.scene.values?.length >= 100));
   const showKeys = keypadNeeded && (narrow || keypadOn);
   const doneCount = Math.min(state.primaryDone, RUN_LENGTH);
+  const report = state.clock ? timedReport(state) : null;
+  const exampleLeft = state.clock ? state.clock.exampleDeadline - state.now : 0;
+  const runLeft = state.clock ? state.clock.runDeadline - state.now : 0;
 
   return (
     <>
@@ -594,45 +622,75 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
           </p>
           <h1>{topic.title}</h1>
         </div>
-        {dropGame ? <span /> : <p className="progress-label">
-          {state.question.isReplay
-            ? "Повтор ошибки"
-            : state.phase === "done"
-              ? `${RUN_LENGTH} из ${RUN_LENGTH}`
-              : `Пример ${Math.min(state.primaryDone + 1, RUN_LENGTH)} из ${RUN_LENGTH}`}
-        </p>}
+        {dropGame || (state.clock && state.phase === "done") ? <span /> : state.clock ? (
+          <p className="clocks">
+            <span>Пример {formatLeft(exampleLeft)}</span>
+            <span>Тренировка {formatLeft(runLeft)}</span>
+          </p>
+        ) : (
+          <p className="progress-label">
+            {state.question.isReplay
+              ? "Повтор ошибки"
+              : state.phase === "done"
+                ? `${RUN_LENGTH} из ${RUN_LENGTH}`
+                : `Пример ${Math.min(state.primaryDone + 1, RUN_LENGTH)} из ${RUN_LENGTH}`}
+          </p>
+        )}
       </div>
       {topic.note ? <p className="note">{topic.note}</p> : null}
 
       {state.phase === "done" ? (
         <section className="results">
           <h2>Статистика тренировки</h2>
-          {record && record.earned > record.prev && record.earned > 0 ? (
+          {!report && record && record.earned > record.prev && record.earned > 0 ? (
             <p className="record">Новый результат!</p>
           ) : null}
           <div className="result-grid">
-            <article>
-              <h3>Верных ответов</h3>
-              <p>
-                {state.stats.firstCorrect} из {RUN_LENGTH}
-              </p>
-            </article>
-            <article>
-              <h3>Точность</h3>
-              <p>{Math.round((state.stats.firstCorrect / RUN_LENGTH) * 100)}%</p>
-            </article>
-            <article>
-              <h3>Очки опыта</h3>
-              <p>{state.stats.xp}</p>
-            </article>
+            {report ? (
+              <>
+                <article>
+                  <h3>Очки</h3>
+                  <p>{report.points}</p>
+                </article>
+                <article>
+                  <h3>Верные ответы</h3>
+                  <p>{report.correct} из {report.given}</p>
+                </article>
+                <article>
+                  <h3>Среднее время</h3>
+                  <p>{formatAnswerTime(report.averageMs)}</p>
+                </article>
+              </>
+            ) : (
+              <>
+                <article>
+                  <h3>Верных ответов</h3>
+                  <p>
+                    {state.stats.firstCorrect} из {RUN_LENGTH}
+                  </p>
+                </article>
+                <article>
+                  <h3>Точность</h3>
+                  <p>{Math.round((state.stats.firstCorrect / RUN_LENGTH) * 100)}%</p>
+                </article>
+                <article>
+                  <h3>Очки опыта</h3>
+                  <p>{state.stats.xp}</p>
+                </article>
+              </>
+            )}
           </div>
-          <p className="result-stars" aria-label={`Звёзды: ${record?.earned || 0} из 3`}>
-            {[1, 2, 3].map((star) => (
-              <span key={star} className={star <= (record?.earned || 0) ? "on" : ""}>
-                ★
-              </span>
-            ))}
-          </p>
+          {report ? <p className="record-line">Рекорд: {record?.pointsNext ?? report.points}</p> : null}
+          {report && record && report.points > record.pointsPrev && report.points > 0 ? <p className="record">Новый рекорд!</p> : null}
+          {report ? null : (
+            <p className="result-stars" aria-label={`Звёзды: ${record?.earned || 0} из 3`}>
+              {[1, 2, 3].map((star) => (
+                <span key={star} className={star <= (record?.earned || 0) ? "on" : ""}>
+                  ★
+                </span>
+              ))}
+            </p>
+          )}
           <button type="button" className="primary wide" onClick={onAgain}>
             Новая тренировка
           </button>
@@ -646,7 +704,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
         <div className="trainer-layout">
           <section className="board">
             {dropGame ? null : <div className="runbar" aria-hidden="true">
-              <span style={{ width: `${(doneCount / RUN_LENGTH) * 100}%` }} />
+              <span style={{ width: `${state.clock ? Math.max(0, Math.min(100, (runLeft / state.clock.totalMs) * 100)) : (doneCount / RUN_LENGTH) * 100}%` }} />
             </div>}
             <div className="stage">
               {state.question.type === "paint" ? (
@@ -731,7 +789,7 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
                 </div>
                 <div>
                   <span>Время</span>
-                  <strong>{clock}</strong>
+                  <strong>{storyClock}</strong>
                 </div>
               </>
             ) : (
@@ -811,8 +869,59 @@ function Run({ located, gradeId, ops, onAgain, onRetune }) {
   );
 }
 
+function readSeconds(value, fallback) {
+  const number = Math.round(Number(value));
+  if (!Number.isFinite(number) || number < 1) return fallback;
+  return Math.min(number, 3600);
+}
+
+function TimeChoice({ timed, setTimed, exampleSeconds, setExampleSeconds, totalSeconds, setTotalSeconds }) {
+  return (
+    <div className="time-choice">
+      <button type="button" className={timed ? "secondary on" : "secondary"} onClick={() => setTimed((value) => !value)}>
+        {timed ? "На время: включено" : "На время: выключено"}
+      </button>
+      {timed ? (
+        <div className="time-fields">
+          <label>
+            Секунды на один пример
+            <input
+              type="number"
+              min="1"
+              max="600"
+              inputMode="numeric"
+              value={exampleSeconds}
+              onChange={(event) => setExampleSeconds(readSeconds(event.target.value, 1))}
+            />
+          </label>
+          <label>
+            Секунды на всю тренировку
+            <input
+              type="number"
+              min="1"
+              max="3600"
+              inputMode="numeric"
+              value={totalSeconds}
+              onChange={(event) => setTotalSeconds(readSeconds(event.target.value, 1))}
+            />
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function useTimeChoice() {
+  const [timed, setTimed] = useState(false);
+  const [exampleSeconds, setExampleSeconds] = useState(20);
+  const [totalSeconds, setTotalSeconds] = useState(120);
+  const clock = timed ? { exampleSeconds, totalSeconds } : null;
+  return { timed, setTimed, exampleSeconds, setExampleSeconds, totalSeconds, setTotalSeconds, clock };
+}
+
 function Setup({ topic, onStart }) {
   const [ops, setOps] = useState(topic.setup.ops);
+  const time = useTimeChoice();
   function toggle(op) {
     setOps((current) => {
       if (current.includes(op)) {
@@ -827,7 +936,7 @@ function Setup({ topic, onStart }) {
       className="setup"
       onSubmit={(event) => {
         event.preventDefault();
-        onStart(ops);
+        onStart(ops, time.clock);
       }}
     >
       <h2>Какие действия включать</h2>
@@ -839,6 +948,26 @@ function Setup({ topic, onStart }) {
           </label>
         ))}
       </div>
+      <TimeChoice {...time} />
+      <button type="submit" className="primary wide">
+        Начать тренировку
+      </button>
+    </form>
+  );
+}
+
+function StartCard({ onStart }) {
+  const time = useTimeChoice();
+  return (
+    <form
+      className="setup"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onStart(time.clock);
+      }}
+    >
+      <h2>Как заниматься</h2>
+      <TimeChoice {...time} />
       <button type="submit" className="primary wide">
         Начать тренировку
       </button>
@@ -852,10 +981,14 @@ export default function Trainer() {
   const located = findTopic(gradeId, topicId);
   const [run, setRun] = useState(0);
   const [ops, setOps] = useState(null);
+  const [clock, setClock] = useState(null);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     setRun(0);
     setOps(null);
+    setClock(null);
+    setStarted(false);
   }, [gradeId, topicId]);
 
   if (!located) {
@@ -885,16 +1018,33 @@ export default function Trainer() {
             </div>
           </div>
           {located.topic.note ? <p className="note">{located.topic.note}</p> : null}
-          <Setup topic={located.topic} onStart={setOps} />
+          <Setup topic={located.topic} onStart={(nextOps, nextClock) => { setOps(nextOps); setClock(nextClock); setStarted(true); }} />
+        </>
+      ) : !started ? (
+        <>
+          <div className="trainer-top">
+            <Link className="back" to={`/${gradeId}`}>
+              К списку
+            </Link>
+            <div>
+              <p className="crumb">
+                Математика · {gradeId} класс
+              </p>
+              <h1>{located.topic.title}</h1>
+            </div>
+          </div>
+          {located.topic.note ? <p className="note">{located.topic.note}</p> : null}
+          <StartCard onStart={(nextClock) => { setClock(nextClock); setStarted(true); }} />
         </>
       ) : (
         <Run
-          key={`${gradeId}-${topicId}-${run}-${(ops || []).join("")}`}
+          key={`${gradeId}-${topicId}-${run}-${(ops || []).join("")}-${clock ? `${clock.exampleSeconds}-${clock.totalSeconds}` : "free"}`}
           located={located}
           gradeId={gradeId}
           ops={ops}
+          clock={clock}
           onAgain={() => setRun((value) => value + 1)}
-          onRetune={located.topic.setup ? () => setOps(null) : null}
+          onRetune={located.topic.setup ? () => { setOps(null); setStarted(false); } : null}
         />
       )}
     </main>

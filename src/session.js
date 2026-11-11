@@ -68,11 +68,18 @@ function queueReplay(state) {
 }
 
 function serve(state, question, primaryDone, queue, used = state.used) {
+  const now = state.now || 0;
+  const clock = state.clock
+    ? { ...state.clock, exampleDeadline: now + state.clock.exampleMs }
+    : null;
   return {
     ...state,
     question,
     queue,
     used,
+    clock,
+    now,
+    attemptStartedAt: state.clock ? now : state.attemptStartedAt,
     input: "",
     flashValue: "",
     phase: "answer",
@@ -97,7 +104,7 @@ function advance(state, topic, ops) {
     const due = queue[dueIndex];
     return serve(state, due.question, primaryDone, queue.filter((_, index) => index !== dueIndex));
   }
-  if (primaryDone >= RUN_LENGTH) {
+  if (!state.clock && primaryDone >= RUN_LENGTH) {
     if (queue.length) {
       const due = queue[0];
       return serve(state, due.question, primaryDone, queue.slice(1));
@@ -116,12 +123,19 @@ function advance(state, topic, ops) {
   return serve(state, drawn.question, primaryDone, queue, drawn.used);
 }
 
-function applyCorrect(state) {
-  const counts = !state.attempted && !state.question.isReplay;
+function applyCorrect(state, now) {
+  const timed = Boolean(state.clock);
+  const counts = timed ? !state.question.isReplay : !state.attempted && !state.question.isReplay;
   const gain = counts ? state.stats.multiplier : 0;
   const streak = counts ? state.stats.streak + 1 : state.stats.streak;
+  const step = timed ? 3 : 5;
+  const answers = timed && counts
+    ? [...(state.answers || []), { ok: true, ms: Math.max(0, now - (state.attemptStartedAt || 0)) }]
+    : state.answers;
   return {
     ...state,
+    answers,
+    now,
     past: !state.attempted ? pushPast(state, "ok") : state.past,
     status: { kind: "ok", text: "Верно!" },
     stats: {
@@ -129,7 +143,7 @@ function applyCorrect(state) {
       xp: state.stats.xp + gain,
       firstCorrect: state.stats.firstCorrect + (counts ? 1 : 0),
       streak,
-      multiplier: counts ? 1 + Math.floor(streak / 5) : state.stats.multiplier,
+      multiplier: counts ? 1 + Math.floor(streak / step) : state.stats.multiplier,
     },
   };
 }
@@ -162,11 +176,17 @@ function pictureHint(question, typed) {
   return "";
 }
 
-function markWrong(state, value) {
+function markWrong(state, value, now) {
   const first = !state.attempted;
   const keepPicture = Boolean(state.question.picture && value);
+  const stamped = now ?? state.now ?? 0;
+  const answers = state.clock && first
+    ? [...(state.answers || []), { ok: false, ms: Math.max(0, stamped - (state.attemptStartedAt || 0)) }]
+    : state.answers;
   return {
     ...state,
+    answers,
+    now: stamped,
     queue: queueReplay(state),
     past: first ? pushPast(state, "bad", value) : state.past,
     input: keepPicture ? value : "",
@@ -234,9 +254,12 @@ function choose(state, value) {
   return { wrong: true, state, value };
 }
 
-export function initSession(topic, ops) {
+export function initSession(topic, ops, clock) {
   const drawn = drawQuestion(topic, ops, [], "", "");
   const question = drawn.question;
+  const now = clock?.now ?? 0;
+  const exampleMs = Math.max(1, Number(clock?.exampleSeconds) || 0) * 1000;
+  const totalMs = Math.max(1, Number(clock?.totalSeconds) || 0) * 1000;
   return {
     question,
     input: "",
@@ -256,14 +279,77 @@ export function initSession(topic, ops) {
     pictureRedo: false,
     showSolution: false,
     hintText: "",
+    now,
+    attemptStartedAt: now,
+    answers: [],
+    clock: clock
+      ? { exampleMs, totalMs, exampleDeadline: now + exampleMs, runDeadline: now + totalMs }
+      : null,
     stats: { xp: 0, firstCorrect: 0, wrong: 0, streak: 0, multiplier: 1 },
   };
 }
 
+export function timedReport(state) {
+  const answers = state.answers || [];
+  const correct = answers.filter((item) => item.ok).length;
+  const averageMs = answers.length ? answers.reduce((sum, item) => sum + item.ms, 0) / answers.length : 0;
+  return { points: state.stats?.xp || 0, correct, given: answers.length, averageMs };
+}
+
+function finishTimed(state) {
+  return {
+    ...state,
+    phase: "done",
+    input: "",
+    flashValue: "",
+    showSolution: false,
+    hintText: "",
+    status: null,
+  };
+}
+
+function expireExample(state, now) {
+  return {
+    ...state,
+    now,
+    phase: "answer",
+    input: "",
+    flashValue: "",
+    pictureRedo: false,
+    pictureHint: "",
+    showSolution: false,
+    hintText: "",
+    status: { kind: "time", text: "Время вышло" },
+    attemptStartedAt: now,
+    clock: { ...state.clock, exampleDeadline: now + state.clock.exampleMs },
+    stats: { ...state.stats, streak: 0, multiplier: 1 },
+  };
+}
+
 export function reduceSession(state, action, topic, ops) {
+  const now = action.now ?? state.now ?? 0;
+  if (action.now != null) state = { ...state, now };
+  if (action.type === "tick-clock") {
+    if (!state.clock || state.phase === "done") return state;
+    if (now >= state.clock.runDeadline) return finishTimed({ ...state, now });
+    if ((state.phase === "answer" || state.phase === "flash") && now >= state.clock.exampleDeadline) {
+      return expireExample(state, now);
+    }
+    return { ...state, now };
+  }
+  if (state.clock && state.phase !== "done" && now >= state.clock.runDeadline) {
+    return finishTimed({ ...state, now });
+  }
   if (action.type === "tick-flash") {
     if (state.phase !== "flash") return state;
-    return { ...state, phase: "answer", flashValue: "", input: state.pictureRedo ? state.input : "" };
+    return {
+      ...state,
+      phase: "answer",
+      flashValue: "",
+      input: state.pictureRedo ? state.input : "",
+      attemptStartedAt: state.clock ? now : state.attemptStartedAt,
+      now,
+    };
   }
   if (action.type === "tick-reveal") {
     if (state.phase !== "reveal") return state;
@@ -276,6 +362,9 @@ export function reduceSession(state, action, topic, ops) {
     if (state.phase === "answer" && !state.attempted) {
       current = {
         ...state,
+        answers: state.clock
+          ? [...(state.answers || []), { ok: false, ms: Math.max(0, now - (state.attemptStartedAt || 0)) }]
+          : state.answers,
         queue: queueReplay(state),
         attempted: true,
         past: pushPast(state, "skip"),
@@ -303,6 +392,9 @@ export function reduceSession(state, action, topic, ops) {
     const first = !state.attempted;
     return {
       ...state,
+      answers: state.clock && first
+        ? [...(state.answers || []), { ok: false, ms: Math.max(0, now - (state.attemptStartedAt || 0)) }]
+        : state.answers,
       queue: queueReplay(state),
       phase: "reveal",
       showSolution: false,
@@ -345,19 +437,19 @@ export function reduceSession(state, action, topic, ops) {
   if (action.type === "commit") {
     if (state.phase !== "answer") return state;
     if (state.question.type === "number" && state.question.check) {
-      if (state.input === expectedDigits(state.question)) return advance(applyCorrect(state), topic, ops);
-      return markWrong(state, state.input);
+      if (state.input === expectedDigits(state.question)) return advance(applyCorrect(state, now), topic, ops);
+      return markWrong(state, state.input, now);
     }
     if (state.question.type !== "commit") return state;
-    if (state.input === state.question.answer) return advance(applyCorrect(state), topic, ops);
-    return markWrong(state, state.input);
+    if (state.input === state.question.answer) return advance(applyCorrect(state, now), topic, ops);
+    return markWrong(state, state.input, now);
   }
   if (action.type === "build-check") {
     if (state.phase !== "answer" || state.question.type !== "build") return state;
     const { total, blue, orange } = state.question.scene;
     const ok = action.blue >= 1 && action.orange >= 1 && action.blue + action.orange === total && (action.blue !== blue || action.orange !== orange);
-    if (ok) return advance(applyCorrect(state), topic, ops);
-    return markWrong(state, `${action.blue}+${action.orange}`);
+    if (ok) return advance(applyCorrect(state, now), topic, ops);
+    return markWrong(state, `${action.blue}+${action.orange}`, now);
   }
   if (action.type === "select-check") {
     if (state.phase !== "answer" || state.question.type !== "select") return state;
@@ -369,16 +461,16 @@ export function reduceSession(state, action, topic, ops) {
     const ordered = scene.kind === "sort" || scene.kind === "ops" || scene.kind === "dict";
     const sequence = (action.ids || []).join("|") === state.question.answer;
     const exact = raw.slice().sort().join("|") === state.question.answer.split("|").filter(Boolean).sort().join("|");
-    if (share || frame || (ordered ? sequence : exact)) return advance(applyCorrect(state), topic, ops);
-    return markWrong(state, raw.join("|"));
+    if (share || frame || (ordered ? sequence : exact)) return advance(applyCorrect(state, now), topic, ops);
+    return markWrong(state, raw.join("|"), now);
   }
   if (action.type === "paint-check") {
     if (state.phase !== "answer" || state.question.type !== "paint") return state;
     const got = [...action.cells].map((cell) => cell.join(":")).sort().join("|");
-    if (got === state.question.answer) return advance(applyCorrect({ ...state, badPaint: [] }), topic, ops);
+    if (got === state.question.answer) return advance(applyCorrect({ ...state, badPaint: [] }, now), topic, ops);
     const needed = new Set((state.question.answer || "").split("|").filter(Boolean));
     const extras = action.cells.filter((cell) => !needed.has(cell.join(":")));
-    return markWrong({ ...state, badPaint: extras }, got);
+    return markWrong({ ...state, badPaint: extras }, got, now);
   }
 
   let result = state;
@@ -404,7 +496,7 @@ export function reduceSession(state, action, topic, ops) {
     if (held || result.state.question.picture || result.state.question.scene?.kind === "story") {
       const picture = result.state.question.picture;
       return {
-        ...applyCorrect(result.state),
+        ...applyCorrect(result.state, now),
         phase: "reveal",
         showSolution: false,
         hintText: "",
@@ -413,8 +505,8 @@ export function reduceSession(state, action, topic, ops) {
         pictureRedo: false,
       };
     }
-    return advance(applyCorrect(result.state), topic, ops);
+    return advance(applyCorrect(result.state, now), topic, ops);
   }
-  if (result?.wrong) return markWrong(result.state, result.value);
+  if (result?.wrong) return markWrong(result.state, result.value, now);
   return result;
 }

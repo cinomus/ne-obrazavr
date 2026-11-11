@@ -8,7 +8,8 @@ import { pathToFileURL } from "node:url";
 import { everyTopic, GRADES } from "../src/curriculum.js";
 import { LIVE_CARDS } from "./live-cards.js";
 import { assertQuestion, evalTokens, exampleKey, questionKey } from "../src/question.js";
-import { initSession, reduceSession, RUN_LENGTH } from "../src/session.js";
+import { initSession, reduceSession, RUN_LENGTH, timedReport } from "../src/session.js";
+import { rememberRecord, readRecords } from "../src/storage.js";
 
 const SAMPLES = 8;
 
@@ -573,4 +574,128 @@ test("за один заход пример не повторяется, пок�
   const found = small.find((item) => item.title === "Найди фигуры на картинке");
   assert.equal(shapes?.size, 5);
   assert.equal(found?.size, 1);
+});
+
+function answerNumber(state, topic, value, now) {
+  let next = state;
+  for (const digit of String(value)) {
+    next = reduceSession(next, { type: "digit", digit, now }, topic);
+  }
+  if (next.phase === "reveal") next = reduceSession(next, { type: "tick-reveal", now }, topic);
+  return next;
+}
+
+test("режим на время: множитель, ошибка, истечение примера, статистика и рекорд", () => {
+  const topic = everyTopic().find((item) => item.topic.id === "slozhenie-v-predelah-10").topic;
+  const clock = { exampleSeconds: 10, totalSeconds: 80, now: 1_000 };
+  let state = initSession(topic, undefined, clock);
+  assert.equal(state.stats.multiplier, 1);
+  assert.equal(state.stats.xp, 0);
+
+  const times = [2_000, 3_000, 4_000, 5_000];
+  for (let step = 0; step < 3; step += 1) {
+    state = answerNumber(state, topic, state.question.answer, times[step]);
+  }
+  assert.equal(state.stats.xp, 3);
+  assert.equal(state.stats.multiplier, 2);
+  assert.equal(state.stats.streak, 3);
+
+  state = answerNumber(state, topic, state.question.answer, times[3]);
+  assert.equal(state.stats.xp, 5);
+  assert.equal(state.stats.multiplier, 2);
+  assert.equal(timedReport(state).correct, 4);
+  assert.equal(timedReport(state).given, 4);
+
+  const settled = state;
+  const wrong = wrongValue({ ...settled.question, answer: entryDigits(settled.question) });
+  state = answerNumber(settled, topic, wrong, 6_000);
+  assert.equal(state.phase, "flash");
+  assert.equal(state.stats.xp, 5);
+  assert.equal(state.stats.multiplier, 1);
+  assert.equal(state.stats.wrong, 1);
+  assert.equal(questionKey(state.question), questionKey(settled.question));
+  assert.equal(timedReport(state).given, 5);
+  assert.equal(timedReport(state).correct, 4);
+
+  const expiredAt = state.clock.exampleDeadline;
+  const runDeadline = state.clock.runDeadline;
+  const beforeKey = questionKey(state.question);
+  const beforeDone = state.primaryDone;
+  state = reduceSession(state, { type: "tick-clock", now: expiredAt }, topic);
+  assert.equal(state.phase, "answer");
+  assert.equal(questionKey(state.question), beforeKey);
+  assert.equal(state.primaryDone, beforeDone);
+  assert.equal(state.stats.multiplier, 1);
+  assert.equal(state.stats.xp, 5);
+  assert.equal(state.answers.length, 5);
+  assert.equal(state.clock.runDeadline, runDeadline);
+  assert.ok(state.clock.exampleDeadline > expiredAt);
+
+  state = reduceSession(state, { type: "tick-clock", now: runDeadline }, topic);
+  assert.equal(state.phase, "done");
+  const report = timedReport(state);
+  assert.equal(report.points, 5);
+  assert.equal(report.correct, 4);
+  assert.equal(report.given, 5);
+  assert.equal(report.averageMs, state.answers.reduce((sum, item) => sum + item.ms, 0) / 5);
+  assert.equal(state.answers.length, 5);
+
+  const memory = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+  };
+  const first = rememberRecord(1, topic.id, report.points);
+  assert.equal(first.next, 5);
+  assert.equal(first.prev, 0);
+  const lower = rememberRecord(1, topic.id, 2);
+  assert.equal(lower.next, 5);
+  assert.equal(readRecords()[`${1}:${topic.id}`], 5);
+  const beaten = rememberRecord(1, topic.id, 8);
+  assert.equal(beaten.prev, 5);
+  assert.equal(beaten.next, 8);
+
+  let longer = initSession(topic, undefined, { exampleSeconds: 30, totalSeconds: 300, now: 0 });
+  for (let step = 0; step < RUN_LENGTH; step += 1) {
+    longer = answerNumber(longer, topic, longer.question.answer, (step + 1) * 1000);
+    assert.notEqual(longer.phase, "done");
+  }
+  longer = reduceSession(longer, { type: "tick-clock", now: longer.clock.runDeadline }, topic);
+  assert.equal(longer.phase, "done");
+  assert.equal(timedReport(longer).correct, RUN_LENGTH);
+});
+
+test("меньший заход не затирает рекорд тренажёра", () => {
+  const topic = everyTopic().find((item) => item.topic.id === "slozhenie-v-predelah-10").topic;
+  const memory = new Map();
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+    removeItem: (key) => memory.delete(key),
+  };
+  try {
+    const id = `1:${topic.id}`;
+    let best = initSession(topic, undefined, { exampleSeconds: 10, totalSeconds: 80, now: 1_000 });
+    for (let step = 0; step < 3; step += 1) {
+      best = answerNumber(best, topic, best.question.answer, 2_000 + step * 1_000);
+    }
+    best = reduceSession(best, { type: "tick-clock", now: best.clock.runDeadline }, topic);
+    const bestReport = timedReport(best);
+    assert.equal(bestReport.points, 3);
+    assert.equal(rememberRecord(1, topic.id, bestReport.points).next, 3);
+
+    let weaker = initSession(topic, undefined, { exampleSeconds: 10, totalSeconds: 80, now: 20_000 });
+    weaker = answerNumber(weaker, topic, weaker.question.answer, 21_000);
+    weaker = reduceSession(weaker, { type: "tick-clock", now: weaker.clock.runDeadline }, topic);
+    const weakerReport = timedReport(weaker);
+    assert.equal(weakerReport.points, 1);
+    const kept = rememberRecord(1, topic.id, weakerReport.points);
+    assert.equal(kept.prev, 3);
+    assert.equal(kept.next, 3);
+    assert.equal(readRecords()[id], 3);
+    assert.notEqual(weakerReport.points, readRecords()[id]);
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
 });

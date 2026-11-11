@@ -382,6 +382,47 @@ h1, h2, h3, p { margin: 0; }
   box-shadow: 3px 3px 0 var(--honey);
 }
 
+.clocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.clocks span {
+  font-weight: 800;
+  color: var(--forest-deep);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  box-shadow: 3px 3px 0 var(--lake);
+}
+
+.clocks span + span { box-shadow: 3px 3px 0 var(--honey); }
+
+.time-choice { margin-top: 16px; }
+.time-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  text-align: left;
+}
+.time-fields label { display: grid; gap: 6px; font-weight: 800; }
+.time-fields input {
+  font: inherit;
+  font-weight: 800;
+  font-size: 1.2rem;
+  padding: 10px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--honey);
+}
+.record-line { margin-top: 14px; font-weight: 800; font-size: 1.15rem; }
+.status-time { color: var(--berry); font-weight: 800; }
+
 .note {
   margin-top: 12px;
   color: var(--muted);

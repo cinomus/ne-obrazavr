@@ -9,7 +9,7 @@ import { everyTopic, GRADES } from "../src/curriculum.js";
 import { LIVE_CARDS } from "./live-cards.js";
 import { assertQuestion, evalTokens, exampleKey, questionKey } from "../src/question.js";
 import { exampleBarPercent, initSession, reduceSession, RUN_LENGTH, timedReport } from "../src/session.js";
-import { rememberRecord, readRecords } from "../src/storage.js";
+import { rememberRecord, readRecords, rememberScore, scoreParts } from "../src/storage.js";
 
 const SAMPLES = 8;
 
@@ -736,6 +736,52 @@ test("меньший заход не затирает рекорд тренаж�
     assert.equal(kept.next, 3);
     assert.equal(readRecords()[id], 3);
     assert.notEqual(weakerReport.points, readRecords()[id]);
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test("длинный заход хранит долю от числа ответов, а не от десяти", () => {
+  const topic = everyTopic().find((item) => item.topic.id === "slozhenie-v-predelah-10").topic;
+  let state = initSession(topic, undefined, { exampleSeconds: 30, totalSeconds: 600, now: 0 });
+  for (let step = 0; step < 11; step += 1) {
+    state = answerNumber(state, topic, state.question.answer, (step + 1) * 1000);
+  }
+  const wrong = wrongValue({ ...state.question, answer: entryDigits(state.question) });
+  state = answerNumber(state, topic, wrong, 12_000);
+  assert.equal(state.phase, "flash");
+  const report = timedReport(state);
+  assert.equal(report.correct, 11);
+  assert.equal(report.given, 12);
+  assert.ok(report.correct > RUN_LENGTH);
+  assert.ok(report.given >= report.correct);
+
+  const memory = new Map();
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+    removeItem: (key) => memory.delete(key),
+  };
+  try {
+    assert.equal(scoreParts(8).total, RUN_LENGTH);
+    assert.equal(scoreParts(26).total, null);
+    const saved = rememberScore(1, topic.id, report.correct, report.given);
+    assert.equal(saved.correct, 11);
+    assert.equal(saved.total, 12);
+    const shorter = rememberScore(1, topic.id, 9, RUN_LENGTH);
+    assert.equal(shorter.correct, 11);
+    assert.equal(shorter.total, 12);
+    const legacy = new Map();
+    globalThis.localStorage = {
+      getItem: (key) => (legacy.has(key) ? legacy.get(key) : null),
+      setItem: (key, value) => legacy.set(key, String(value)),
+      removeItem: (key) => legacy.delete(key),
+    };
+    legacy.set("ne-obrazavr-scores", JSON.stringify({ [`1:${topic.id}`]: 26 }));
+    const replaced = rememberScore(1, topic.id, 11, 12);
+    assert.equal(replaced.correct, 11);
+    assert.equal(replaced.total, 12);
   } finally {
     globalThis.localStorage = previousStorage;
   }

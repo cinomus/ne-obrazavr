@@ -1,3 +1,5 @@
+import { RUN_LENGTH } from "./session.js";
+
 const STAR_KEY = "ne-obrazavr-stars";
 const SCORE_KEY = "ne-obrazavr-scores";
 const RECORD_KEY = "ne-obrazavr-records";
@@ -43,14 +45,37 @@ export function readScores() {
   return readJson(SCORE_KEY);
 }
 
-export function rememberScore(grade, topicId, firstCorrect) {
+// A saved score is the best correct count together with how many answers
+// that run actually contained. A bare number up to the set size is an older
+// untimed result. A bare number past that size has no honest denominator.
+export function scoreParts(saved) {
+  if (saved && typeof saved === "object") {
+    const correct = Math.max(0, Math.round(Number(saved.correct) || 0));
+    const total = Math.max(correct, Math.round(Number(saved.total) || 0));
+    return { correct, total };
+  }
+  const correct = Math.max(0, Math.round(Number(saved) || 0));
+  if (correct <= RUN_LENGTH) return { correct, total: RUN_LENGTH };
+  return { correct, total: null };
+}
+
+function betterScore(prev, next) {
+  if (!prev) return true;
+  if (prev.total == null && next.total != null) return true;
+  if (next.total == null) return false;
+  if (next.correct !== prev.correct) return next.correct > prev.correct;
+  return next.total < prev.total;
+}
+
+export function rememberScore(grade, topicId, correct, total) {
   const all = readScores();
   const id = starId(grade, topicId);
-  const prev = all[id] || 0;
-  const next = Math.max(prev, firstCorrect);
-  all[id] = next;
+  const prev = id in all ? scoreParts(all[id]) : null;
+  const next = scoreParts({ correct, total });
+  const chosen = betterScore(prev, next) ? next : prev;
+  all[id] = chosen.total == null ? chosen.correct : { correct: chosen.correct, total: chosen.total };
   localStorage.setItem(SCORE_KEY, JSON.stringify(all));
-  return next;
+  return scoreParts(all[id]);
 }
 
 export function shownRecord(saved, xp) {

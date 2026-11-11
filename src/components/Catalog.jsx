@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { GRADES, getGrade, trainersWord } from "../curriculum";
-import { readScores, readStars, starId } from "../storage";
+import { readScores, readStars, scoreParts, starId } from "../storage";
 import { RUN_LENGTH } from "../session";
 
 function norm(value) {
@@ -116,7 +116,7 @@ export default function Catalog() {
               <ul>
                 {chapter.topics.map((topic, index) => {
                   const id = starId(grade.id, topic.id);
-                  const best = scores[id] || 0;
+                  const best = id in scores ? scoreParts(scores[id]) : { correct: 0, total: RUN_LENGTH };
                   const started = id in scores || (stars[id] || 0) > 0;
                   return (
                     <li key={topic.id}>
@@ -127,7 +127,7 @@ export default function Catalog() {
                           <span className="train-title">{topic.title}</span>
                           <span className="row-meta">
                             <span className="ratio">
-                              {best} / {RUN_LENGTH}
+                              {best.total == null ? best.correct : `${best.correct} / ${best.total}`}
                             </span>
                             <Stars value={stars[id] || 0} />
                           </span>

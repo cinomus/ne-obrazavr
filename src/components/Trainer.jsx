@@ -563,7 +563,12 @@ function Run({ located, gradeId, ops, clock, onAgain, onRetune }) {
       report ? report.correct : state.stats.firstCorrect,
       report ? Math.max(report.given, 1) : RUN_LENGTH,
     );
-    rememberScore(gradeId, topic.id, state.stats.firstCorrect);
+    rememberScore(
+      gradeId,
+      topic.id,
+      report ? report.correct : state.stats.firstCorrect,
+      report ? report.given : RUN_LENGTH,
+    );
     const points = rememberRecord(gradeId, topic.id, state.stats.xp);
     setRecord({ ...rememberStars(gradeId, topic.id, earned), pointsPrev: points.prev, pointsNext: points.next });
   }, [state.phase, state.stats.firstCorrect, state.stats.xp, gradeId, topic.id, record, state.clock, state.answers]);
@@ -796,7 +801,9 @@ function Run({ located, gradeId, ops, clock, onAgain, onRetune }) {
               <>
                 <div>
                   <span>Верно</span>
-                  <strong>{state.stats.firstCorrect}</strong>
+                  <strong className={report && report.given ? "long-count" : ""}>
+                    {report && report.given ? `${report.correct} из ${report.given}` : state.stats.firstCorrect}
+                  </strong>
                 </div>
                 <div>
                   <span>Множитель</span>

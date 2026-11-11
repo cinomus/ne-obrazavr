@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { beep } from "../beep";
 import { findTopic, neighborTopics } from "../curriculum";
 import { childFacingText } from "../question";
-import { initSession, reduceSession, RUN_LENGTH, timedReport } from "../session";
+import { exampleBarPercent, initSession, reduceSession, RUN_LENGTH, timedReport } from "../session";
 import {
   keypadPreferred,
   readRecords,
@@ -704,7 +704,7 @@ function Run({ located, gradeId, ops, clock, onAgain, onRetune }) {
         <div className="trainer-layout">
           <section className="board">
             {dropGame ? null : <div className="runbar" aria-hidden="true">
-              <span style={{ width: `${state.clock ? Math.max(0, Math.min(100, (runLeft / state.clock.totalMs) * 100)) : (doneCount / RUN_LENGTH) * 100}%` }} />
+              <span style={{ width: `${state.clock ? exampleBarPercent(state.clock, state.now) : (doneCount / RUN_LENGTH) * 100}%` }} />
             </div>}
             <div className="stage">
               {state.question.type === "paint" ? (

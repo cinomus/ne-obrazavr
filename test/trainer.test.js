@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { everyTopic, GRADES } from "../src/curriculum.js";
 import { LIVE_CARDS } from "./live-cards.js";
 import { assertQuestion, evalTokens, exampleKey, questionKey } from "../src/question.js";
-import { initSession, reduceSession, RUN_LENGTH, timedReport } from "../src/session.js";
+import { exampleBarPercent, initSession, reduceSession, RUN_LENGTH, timedReport } from "../src/session.js";
 import { rememberRecord, readRecords } from "../src/storage.js";
 
 const SAMPLES = 8;
@@ -621,6 +621,10 @@ test("режим на время: множитель, ошибка, истече
   const runDeadline = state.clock.runDeadline;
   const beforeKey = questionKey(state.question);
   const beforeDone = state.primaryDone;
+  const beforeBar = exampleBarPercent(state.clock, state.now);
+  assert.ok(beforeBar > 0);
+  const midBar = exampleBarPercent(state.clock, state.now + (state.clock.exampleDeadline - state.now) / 2);
+  assert.ok(midBar < beforeBar && midBar > 0);
   state = reduceSession(state, { type: "tick-clock", now: expiredAt }, topic);
   assert.equal(state.phase, "answer");
   assert.equal(questionKey(state.question), beforeKey);
@@ -629,7 +633,20 @@ test("режим на время: множитель, ошибка, истече
   assert.equal(state.stats.xp, 5);
   assert.equal(state.answers.length, 5);
   assert.equal(state.clock.runDeadline, runDeadline);
-  assert.ok(state.clock.exampleDeadline > expiredAt);
+  assert.equal(state.clock.exampleDeadline, expiredAt);
+  assert.equal(state.clock.barStopped, true);
+  assert.equal(exampleBarPercent(state.clock, state.now), 0);
+  const held = reduceSession(state, { type: "tick-clock", now: state.now + 3_000 }, topic);
+  assert.equal(held.clock.exampleDeadline, expiredAt);
+  assert.equal(held.clock.runDeadline, runDeadline);
+  assert.equal(exampleBarPercent(held.clock, held.now), 0);
+  assert.equal(questionKey(held.question), beforeKey);
+  assert.equal(held.stats.xp, 5);
+  let moved = answerNumber(state, topic, state.question.answer, state.now + 500);
+  if (moved.phase === "reveal") moved = reduceSession(moved, { type: "tick-reveal", now: state.now + 500 }, topic);
+  assert.equal(moved.clock.barStopped, false);
+  assert.equal(exampleBarPercent(moved.clock, moved.now), 100);
+  assert.notEqual(questionKey(moved.question), beforeKey);
 
   state = reduceSession(state, { type: "tick-clock", now: runDeadline }, topic);
   assert.equal(state.phase, "done");

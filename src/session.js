@@ -70,7 +70,7 @@ function queueReplay(state) {
 function serve(state, question, primaryDone, queue, used = state.used) {
   const now = state.now || 0;
   const clock = state.clock
-    ? { ...state.clock, exampleDeadline: now + state.clock.exampleMs }
+    ? { ...state.clock, exampleDeadline: now + state.clock.exampleMs, barStopped: false }
     : null;
   return {
     ...state,
@@ -283,10 +283,17 @@ export function initSession(topic, ops, clock) {
     attemptStartedAt: now,
     answers: [],
     clock: clock
-      ? { exampleMs, totalMs, exampleDeadline: now + exampleMs, runDeadline: now + totalMs }
+      ? { exampleMs, totalMs, exampleDeadline: now + exampleMs, runDeadline: now + totalMs, barStopped: false }
       : null,
     stats: { xp: 0, firstCorrect: 0, wrong: 0, streak: 0, multiplier: 1 },
   };
+}
+
+export function exampleBarPercent(clock, now) {
+  if (!clock?.exampleMs) return 0;
+  if (clock.barStopped) return 0;
+  const left = Math.max(0, clock.exampleDeadline - now);
+  return Math.max(0, Math.min(100, (left / clock.exampleMs) * 100));
 }
 
 export function timedReport(state) {
@@ -321,7 +328,7 @@ function expireExample(state, now) {
     hintText: "",
     status: { kind: "time", text: "Время вышло" },
     attemptStartedAt: now,
-    clock: { ...state.clock, exampleDeadline: now + state.clock.exampleMs },
+    clock: { ...state.clock, barStopped: true },
     stats: { ...state.stats, streak: 0, multiplier: 1 },
   };
 }
@@ -332,7 +339,7 @@ export function reduceSession(state, action, topic, ops) {
   if (action.type === "tick-clock") {
     if (!state.clock || state.phase === "done") return state;
     if (now >= state.clock.runDeadline) return finishTimed({ ...state, now });
-    if ((state.phase === "answer" || state.phase === "flash") && now >= state.clock.exampleDeadline) {
+    if ((state.phase === "answer" || state.phase === "flash") && !state.clock.barStopped && now >= state.clock.exampleDeadline) {
       return expireExample(state, now);
     }
     return { ...state, now };

@@ -576,6 +576,30 @@ test("за один заход пример не повторяется, пок�
   assert.equal(found?.size, 1);
 });
 
+test("соседние примеры не повторяют ответ, пока в наборе есть другой", () => {
+  const topic = everyTopic().find((item) => item.topic.id === "slozhenie-v-predelah-10").topic;
+  for (let run = 0; run < 4; run += 1) {
+    let state = initSession(topic);
+    const answers = [];
+    const keys = [];
+    for (let step = 0; step < RUN_LENGTH; step += 1) {
+      answers.push(String(state.question.answer));
+      keys.push(exampleKey(state.question));
+      if (step > 0) assert.notEqual(answers[step], answers[step - 1], answers.join(" "));
+      state = answerOne(state, topic);
+    }
+    assert.equal(new Set(keys).size, RUN_LENGTH);
+  }
+  const odd = everyTopic().find((item) => item.grade === 1 && item.topic.title === "Найди лишнюю фигуру").topic;
+  let same = initSession(odd);
+  const only = [];
+  for (let step = 0; step < 4; step += 1) {
+    only.push(String(same.question.answer));
+    same = answerOne(same, odd);
+  }
+  assert.deepEqual(only, ["circle", "circle", "circle", "circle"]);
+});
+
 function answerNumber(state, topic, value, now) {
   let next = state;
   for (const digit of String(value)) {

@@ -13,21 +13,64 @@ function tryMake(topic, ops) {
   }
 }
 
+const answerPools = new Map();
+
+function shownAnswer(question) {
+  return String(question?.answer ?? "");
+}
+
+// Distinct answers this trainer can deal. Sampling stops at the second one.
+// A pool of one answer is left alone: neighboring cards may share it.
+function answerPool(topic, ops) {
+  const id = `${topic.id}|${ops?.join(",") || ""}`;
+  const cached = answerPools.get(id);
+  if (cached) return cached;
+  const answers = new Set();
+  const keys = new Set();
+  let stagnant = 0;
+  for (let attempt = 0; attempt < 500 && stagnant < 80 && answers.size < 2; attempt += 1) {
+    const made = tryMake(topic, ops);
+    if (!made) continue;
+    answers.add(shownAnswer(made));
+    const key = exampleKey(made);
+    if (keys.has(key)) stagnant += 1;
+    else {
+      keys.add(key);
+      stagnant = 0;
+    }
+  }
+  answerPools.set(id, answers);
+  return answers;
+}
+
+function canSeparateAnswers(topic, ops, avoidAnswer) {
+  if (avoidAnswer == null) return false;
+  const answers = answerPool(topic, ops);
+  return answers.size > 1;
+}
+
 // Draw the next new card without putting one back. `used` is the current
 // cycle. When every example the trainer can produce has already appeared,
 // start a new cycle. A pool of one example starts that next cycle immediately.
-function startCycle(topic, ops, avoid, prevKey) {
+// The next card also takes a different answer when the pool has more than one,
+// unless the only examples still unused share the answer just shown.
+function startCycle(topic, ops, avoid, prevKey, avoidAnswer) {
+  const avoidText = avoidAnswer == null ? null : shownAnswer({ answer: avoidAnswer });
+  const skipSame = canSeparateAnswers(topic, ops, avoidText);
   let sameExample = null;
   let fallback = null;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  let sameAnswerExample = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     const made = tryMake(topic, ops);
     if (!made) continue;
     const key = exampleKey(made);
     fallback = { made, key };
-    if (key !== avoid) return { question: { ...made, isReplay: false }, used: [key] };
+    const answerOk = !skipSame || shownAnswer(made) !== avoidText;
+    if (key !== avoid && answerOk) return { question: { ...made, isReplay: false }, used: [key] };
+    if (key !== avoid && !sameAnswerExample) sameAnswerExample = { made, key };
     if (questionKey(made) !== prevKey) sameExample = { made, key };
   }
-  const picked = sameExample || fallback;
+  const picked = sameAnswerExample || sameExample || fallback;
   if (!picked) {
     const made = { type: "number", tokens: ["2", "+", "2"], answer: "4" };
     return { question: { ...made, isReplay: false }, used: [exampleKey(made)] };
@@ -35,17 +78,27 @@ function startCycle(topic, ops, avoid, prevKey) {
   return { question: { ...picked.made, isReplay: false }, used: [picked.key] };
 }
 
-function drawQuestion(topic, ops, used, avoid, prevKey) {
+function drawQuestion(topic, ops, used, avoid, prevKey, avoidAnswer) {
   const seen = new Set(used);
+  const avoidText = avoidAnswer == null ? null : shownAnswer({ answer: avoidAnswer });
+  const skipSame = canSeparateAnswers(topic, ops, avoidText);
   let duplicates = 0;
+  let sameAnswerUnused = null;
   for (let attempt = 0; attempt < 1500 && duplicates < 120; attempt += 1) {
     const made = tryMake(topic, ops);
     if (!made) continue;
     const key = exampleKey(made);
-    if (!seen.has(key)) return { question: { ...made, isReplay: false }, used: [...used, key] };
+    if (!seen.has(key)) {
+      if (skipSame && shownAnswer(made) === avoidText) {
+        if (!sameAnswerUnused) sameAnswerUnused = { question: { ...made, isReplay: false }, used: [...used, key] };
+        continue;
+      }
+      return { question: { ...made, isReplay: false }, used: [...used, key] };
+    }
     duplicates += 1;
   }
-  return startCycle(topic, ops, avoid, prevKey);
+  if (sameAnswerUnused) return sameAnswerUnused;
+  return startCycle(topic, ops, avoid, prevKey, avoidText);
 }
 
 function pushPast(state, kind, user = "") {
@@ -119,7 +172,7 @@ function advance(state, topic, ops) {
       tried: [],
     };
   }
-  const drawn = drawQuestion(topic, ops, state.used || [], exampleKey(state.question), state.prevKey);
+  const drawn = drawQuestion(topic, ops, state.used || [], exampleKey(state.question), state.prevKey, state.question.answer);
   return serve(state, drawn.question, primaryDone, queue, drawn.used);
 }
 
